@@ -10,7 +10,7 @@ The initial objectives:
 - [x] Feature extraction from my EfficientNet implementations (https://github.com/rwightman/gen-efficientnet-pytorch or https://github.com/rwightman/pytorch-image-models)
 - [x] Low level blocks / helpers (SeparableConv, create_pool2d (same padding), etc)
 - [x] PyTorch implementation of BiFPN, BoxNet, ClassNet modules and related submodules
-- [ ] Port Tensorflow checkpoints to PyTorch
+- [x] Port Tensorflow checkpoints to PyTorch -- initial D1 checkpoint converted, state_dict loaded, on to validation....
 - [ ] Basic MS COCO validation script
 - [ ] Lots of cleanup, testing
 
