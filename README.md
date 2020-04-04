@@ -11,7 +11,11 @@ The initial objectives:
 - [x] Low level blocks / helpers (SeparableConv, create_pool2d (same padding), etc)
 - [x] PyTorch implementation of BiFPN, BoxNet, ClassNet modules and related submodules
 - [x] Port Tensorflow checkpoints to PyTorch -- initial D1 checkpoint converted, state_dict loaded, on to validation....
-- [ ] Basic MS COCO validation script
+- [x] Basic MS COCO validation script
+  - [x] Temporary (hacky) COCO dataset and transform 
+  - [x] Port reference TF anchor and object detection code
+  - [x] Verify model output sanity (definitely signs of life with some valid predictions, has issues, likely alignment/padding/missed activation)
+  - [ ] Integrate MSCOCO eval metric calcs
 - [ ] Lots of cleanup, testing
 
 Possible future directions:
