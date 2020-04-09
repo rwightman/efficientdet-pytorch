@@ -1,3 +1,9 @@
+""" PyTorch EfficientDet support benches
+
+Post-proc code adapted from Tensorflow version at: https://github.com/google/automl/tree/master/efficientdet
+
+Hacked together by Ross Wightman
+"""
 import torch
 import torch.nn as nn
 from .anchors import Anchors, generate_detections, MAX_DETECTION_POINTS

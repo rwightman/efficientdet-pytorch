@@ -1,3 +1,7 @@
+""" Object detection loader/collate
+
+Hacked together by Ross Wightman
+"""
 import torch.utils.data
 from .transforms import *
 
@@ -8,6 +12,7 @@ MAX_NUM_INSTANCES = 100
 def fast_collate(batch):
     batch_size = len(batch)
 
+    # FIXME this needs to be more robust
     target = dict()
     for k, v in batch[0][1].items():
         if isinstance(v, np.ndarray):

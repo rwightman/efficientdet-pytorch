@@ -1,3 +1,7 @@
+""" COCO transforms (quick and dirty)
+
+Hacked together by Ross Wightman
+"""
 import torch
 from PIL import Image
 import numpy as np

@@ -1,3 +1,10 @@
+""" PyTorch EfficientDet model
+
+Based on official Tensorflow version at: https://github.com/google/automl/tree/master/efficientdet
+Paper: https://arxiv.org/abs/1911.09070
+
+Hacked together by Ross Wightman
+"""
 import torch
 import torch.nn as nn
 import logging
