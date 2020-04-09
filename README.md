@@ -46,7 +46,14 @@ Before the COVID-19 madness changed priorities I was looking into signing up for
 
 # Usage
 
-Install latest `pytorch`, `timm`, and ideally NVIDIA apex packages in a Python 3.6+ environment.
+Tested in a Python 3.7 or 3.8 conda environment in Linux with:
+* PyTorch 1.4
+* PyTorch Image Models (timm) 0.1.20, `pip install timm` or local install from (https://github.com/rwightman/pytorch-image-models) 
+* Apex AMP master (as of 2020-04)
+
+*NOTE* - There is a conflict/bug with Numpy 1.18+ and pycocotools, force install numpy <= 1.17.5 or the coco eval will fail,
+the validation script will still save the output JSON and that can be run through eval again later. 
+
 
 Run validation (val2017 by default) with D2 model: `python validation.py /localtion/of/mscoco/ --model tf_efficientdet_d2 --checkpoint tf_efficientdet_d2.pth`
 
