@@ -1,10 +1,19 @@
 # EfficientDet (PyTorch)
 
-This is a work in progress PyTorch implementation of EfficientDet. It is based on the official Tensorflow implementation by [Mingxing Tan and the Google Brain team](https://github.com/google/automl).
+This is a work in progress PyTorch implementation of EfficientDet. 
 
-I am aware there are some reasonable PyTorch implementations out there already. Their approach didn't fit well with my aim to replicate the Tensorflow models closely enough to allow weight ports while still maintaining a PyTorch feel and a high degree of flexibility for future additions. So, this is being done from scratch.
+It is based on the
+* official Tensorflow implementation by [Mingxing Tan and the Google Brain team](https://github.com/google/automl)
+* and paper by Mingxing Tan, Ruoming Pang, Quoc V.Le [EfficientDet: Scalable and Efficient Object Detection](https://arxiv.org/abs/1911.09070) 
 
-The initial objectives:
+I am aware there are other PyTorch implementations. Their approach didn't fit well with my aim to replicate the Tensorflow models closely enough to allow weight ports while still maintaining a PyTorch feel and a high degree of flexibility for future additions. So, this is built from scratch and leverages my previous EfficientNet work.
+
+## Updates / Tasks
+
+### 2020-04-09
+Initial code with working validation posted. Yes, it's a little slow, but I think faster than the official impl on a GPU if you leave AMP enabled. Post processing needs some love. 
+
+### Core Tasks
 - [x] Feature extraction from my EfficientNet implementations (https://github.com/rwightman/gen-efficientnet-pytorch or https://github.com/rwightman/pytorch-image-models)
 - [x] Low level blocks / helpers (SeparableConv, create_pool2d (same padding), etc)
 - [x] PyTorch implementation of BiFPN, BoxNet, ClassNet modules and related submodules
@@ -18,9 +27,10 @@ The initial objectives:
 - [ ] Add torch hub support and pretrained URL based weight download
 - [ ] Change module dependencies from 'timm' to minimal 'geffnet' for backbone, bring some of the layers here
 - [ ] Remove redundant bias layers that exist in the official impl and weights
+- [ ] Add visualization support
 - [ ] Performance improvements, numpy TF detection code -> optimized PyTorch
 
-Possible future directions:
+### Possible Future Tasks
 - [ ] Training (object detection) reimplementation w/ Rand/AutoAugment, etc
 - [ ] Training (semantic segmentation) experiments
 - [ ] Integration with Detectron2 / MMDetection codebases
@@ -30,7 +40,7 @@ Possible future directions:
 
 Before the COVID-19 madness changed priorities I was looking into signing up for GitHub Sponsors. I've decided for now to focus on building. However, if you are an organization interested in sponsoring and any of this work, or prioritization of the possible future directions interests you, feel free to contact me (issue, LinkedIn, Twitter, hello at rwightman dot com)
 
-# Models
+## Models
 
 | Variant | Download | mAP (val2017) | mAP (test-dev2017) | mAP (Tensorflow official test-dev2017) |
 | --- | --- | :---: | :---: | :---: |
@@ -44,7 +54,7 @@ Before the COVID-19 madness changed priorities I was looking into signing up for
 | D7 | [tf_efficientdet_d7.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/efficientdet_d7-f05bf714.pth) | 50.9 | TBD | 52.2 |
 
 
-# Usage
+## Usage
 
 Tested in a Python 3.7 or 3.8 conda environment in Linux with:
 * PyTorch 1.4
@@ -59,13 +69,13 @@ Run validation (val2017 by default) with D2 model: `python validation.py /localt
 
 Run test-dev2017: `python validation.py /localtion/of/mscoco/ --model tf_efficientdet_d2 --checkpoint tf_efficientdet_d2.pth --anno test-dev2017`
 
-# Results
+## Results
 
-## TEST-DEV2017
+### TEST-DEV2017
 
 NOTE: I've only tried submitting D2 to dev server for sanity check so far
 
-### EfficientDet-D2
+#### EfficientDet-D2
 
 ```
  Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.425
@@ -82,9 +92,9 @@ NOTE: I've only tried submitting D2 to dev server for sanity check so far
  Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.749
 ```
 
-## VAL2017
+### VAL2017
 
-### EfficientDet-D0
+#### EfficientDet-D0
 ```
  Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.328
  Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.509
@@ -100,7 +110,7 @@ NOTE: I've only tried submitting D2 to dev server for sanity check so far
  Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.679
 ```
 
-### EfficientDet-D1
+#### EfficientDet-D1
 ```
  Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.385
  Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.575
@@ -118,7 +128,7 @@ NOTE: I've only tried submitting D2 to dev server for sanity check so far
 
 
 
-### EfficientDet-D2
+#### EfficientDet-D2
 ```
  Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.420
  Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.612
@@ -134,7 +144,7 @@ NOTE: I've only tried submitting D2 to dev server for sanity check so far
  Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.741
 ```
 
-### EfficientDet-D3
+#### EfficientDet-D3
 ```
  Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.453
  Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.646
@@ -150,7 +160,7 @@ NOTE: I've only tried submitting D2 to dev server for sanity check so far
  Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.762
 ```
 
-### EfficientDet-D4
+#### EfficientDet-D4
  ```
  Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.483
  Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.680
@@ -166,7 +176,7 @@ NOTE: I've only tried submitting D2 to dev server for sanity check so far
  Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.772
 ```
 
-### EfficientDet-D5
+#### EfficientDet-D5
 ```
  Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.496
  Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.692
@@ -182,7 +192,7 @@ NOTE: I've only tried submitting D2 to dev server for sanity check so far
  Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.785
 ```
 
-### EfficientDet-D6
+#### EfficientDet-D6
 ```
  Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.506
  Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.701
@@ -198,7 +208,7 @@ NOTE: I've only tried submitting D2 to dev server for sanity check so far
  Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.791
 ```
 
-### EfficientDet-D7
+#### EfficientDet-D7
  ```
  Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.509
  Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.705
