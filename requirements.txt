@@ -1,0 +1,4 @@
+torch>=1.4.0
+timm>=0.1.20
+pycocotools
+pyyaml
