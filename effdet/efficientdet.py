@@ -79,20 +79,6 @@ class SeparableConv2d(nn.Module):
         return x
 
 
-class UpsampleNearest2D(nn.Module):
-
-    def __init__(self, scale=2):
-        super(UpsampleNearest2D, self).__init__()
-        self.scale = int(scale)
-
-    def forward(self, x):
-        B, C, H, W = x.shape
-        x = x.reshape([B, C, H, 1, W, 1]) * torch.ones(
-            1, 1, 1, self.scale, 1, self.scale, dtype=x.dtype, device=x.device)
-        x = x.reshape([B, C, H * self.scale, W * self.scale])
-        return x
-
-
 class ResampleFeatureMap(nn.Sequential):
 
     def __init__(self, in_channels, out_channels, reduction_ratio=1., pad_type='', pooling_type='max',
@@ -125,8 +111,7 @@ class ResampleFeatureMap(nn.Sequential):
                 self.add_module('conv', conv)
             if reduction_ratio < 1:
                 scale = int(1 // reduction_ratio)
-                self.add_module('upsample', UpsampleNearest2D(scale=scale))
-                #self.add_module('upsample', nn.UpsamplingNearest2d(scale_factor=scale))
+                self.add_module('upsample', nn.UpsamplingNearest2d(scale_factor=scale))
 
     # def forward(self, x):
     #     #  here for debugging only
