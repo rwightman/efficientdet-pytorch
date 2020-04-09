@@ -30,6 +30,20 @@ Possible future directions:
 
 Before the COVID-19 madness changed priorities I was looking into signing up for GitHub Sponsors. I've decided for now to focus on building. However, if you are an organization interested in sponsoring and any of this work, or prioritization of the possible future directions interests you, feel free to contact me (issue, LinkedIn, Twitter, hello at rwightman dot com)
 
+# Models
+
+| Variant | Download | mAP (val2017) | mAP (test-dev2017) | mAP (Tensorflow official test-dev2017) |
+| --- | --- | :---: | :---: | :---: |
+| D0 | [tf_efficientdet_d0.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/efficientdet_d0-d92fd44f.pth) | 32.8 | TBD | 33.8 |
+| D1 | [tf_efficientdet_d1.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/efficientdet_d1-4c7ebaf2.pth) | 38.5 | TBD | 39.6 |
+| D2 | [tf_efficientdet_d2.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/efficientdet_d2-cb4ce77d.pth) | 42.0 | 42.5 | 43 |
+| D3 | [tf_efficientdet_d3.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/efficientdet_d3-b0ea2cbc.pth) | 45.3 | TBD | 45.8 | 
+| D4 | [tf_efficientdet_d4.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/efficientdet_d4-5b370b7a.pth) | 48.3 | TBD | 49.4 |
+| D5 | [tf_efficientdet_d5.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/efficientdet_d5-ef44aea8.pth) | 49.6 | TBD | 50.7 |
+| D6 | [tf_efficientdet_d6.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/efficientdet_d6-51cb0132.pth) | 50.6 | TBD | 51.7 |
+| D7 | [tf_efficientdet_d7.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/efficientdet_d7-f05bf714.pth) | 50.9 | TBD | 52.2 |
+
+
 # Usage
 
 Install latest `pytorch`, `timm`, and ideally NVIDIA apex packages in a Python 3.6+ environment.
