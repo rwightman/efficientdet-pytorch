@@ -15,6 +15,9 @@ The initial objectives:
   - [x] Verify model output sanity (definitely signs of life with some valid predictions, has issues, likely alignment/padding/missed activation)
   - [X] Integrate MSCOCO eval metric calcs
 - [x] Some cleanup, testing
+- [ ] Add torch hub support and pretrained URL based weight download
+- [ ] Change module dependencies from 'timm' to minimal 'geffnet' for backbone, bring some of the layers here
+- [ ] Remove redundant bias layers that exist in the official impl and weights
 - [ ] Performance improvements, numpy TF detection code -> optimized PyTorch
 
 Possible future directions:
@@ -29,8 +32,34 @@ Before the COVID-19 madness changed priorities I was looking into signing up for
 
 # Usage
 
+Install latest `pytorch`, `timm`, and ideally NVIDIA apex packages in a Python 3.6+ environment.
+
+Run validation (val2017 by default) with D2 model: `python validation.py /localtion/of/mscoco/ --model tf_efficientdet_d2 --checkpoint tf_efficientdet_d2.pth`
+
+Run test-dev2017: `python validation.py /localtion/of/mscoco/ --model tf_efficientdet_d2 --checkpoint tf_efficientdet_d2.pth --anno test-dev2017`
 
 # Results
+
+## TEST-DEV2017
+
+NOTE: I've only tried submitting D2 to dev server for sanity check so far
+
+### EfficientDet-D2
+
+```
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.425
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.618
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.457
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.222
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.467
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.578
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.341
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.536
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.569
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.334
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.627
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.749
+```
 
 ## VAL2017
 

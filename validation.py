@@ -6,26 +6,25 @@ Hacked together by Ross Wightman (https://github.com/rwightman)
 import argparse
 import os
 import json
-import glob
 import time
 import logging
 import torch
-import torch.nn as nn
 import torch.nn.parallel
+try:
+    from apex import amp
+    has_amp = True
+except ImportError:
+    has_amp = False
+
+
 from collections import OrderedDict
 
-from timm.models import create_model, load_checkpoint
-from timm.utils import accuracy, AverageMeter, setup_default_logging
-
+from effdet import EfficientDet, get_efficientdet_config, DetBenchEval, load_checkpoint
 from data import create_loader, CocoDetection
-from effdet import EfficientDet, get_efficientdet_config, DetBenchEval
+from utils import AverageMeter
 
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
-
-from apex import amp
-
-from torchvision.utils import save_image
 
 
 torch.backends.cudnn.benchmark = True
@@ -61,8 +60,6 @@ parser.add_argument('--no-prefetcher', action='store_true', default=False,
                     help='disable fast prefetcher')
 parser.add_argument('--pin-mem', action='store_true', default=False,
                     help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
-parser.add_argument('--fp16', action='store_true', default=False,
-                    help='Use half precision (fp16)')
 parser.add_argument('--torchscript', dest='torchscript', action='store_true',
                     help='convert model torchscript for inference')
 parser.add_argument('--results', default='./results.json', type=str, metavar='FILENAME',
@@ -86,7 +83,8 @@ def validate(args):
     bench = DetBenchEval(model, config)
 
     bench.model = bench.model.cuda()
-    bench.model = amp.initialize(bench.model, opt_level='O1')
+    if has_amp:
+        bench.model = amp.initialize(bench.model, opt_level='O1')
 
     if args.num_gpu > 1:
         bench.model = torch.nn.DataParallel(bench.model, device_ids=list(range(args.num_gpu)))
@@ -133,7 +131,7 @@ def validate(args):
             end = time.time()
 
             if i % args.log_freq == 0:
-                logging.info(
+                print(
                     'Test: [{0:>4d}/{1}]  '
                     'Time: {batch_time.val:.3f}s ({batch_time.avg:.3f}s, {rate_avg:>7.2f}/s)  '
                     .format(
@@ -155,7 +153,6 @@ def validate(args):
 
 
 def main():
-    setup_default_logging()
     args = parser.parse_args()
     validate(args)
 

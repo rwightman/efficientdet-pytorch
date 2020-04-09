@@ -340,7 +340,7 @@ class BiFpn(nn.Module):
             self.cell.add_module(str(rep), fpn_layer)
             feature_info = fpn_layer.feature_info
 
-        # FIXME init weights
+        # FIXME init weights for training
 
     def forward(self, x):
         assert len(self.resample) == self.config.num_levels - len(x)
@@ -383,7 +383,7 @@ class HeadNet(nn.Module):
         else:
             self.predict = ConvBnAct2d(**predict_kwargs)
 
-        # FIXME init weights,
+        # FIXME init weights for training
 
     def forward(self, x):
         outputs = []

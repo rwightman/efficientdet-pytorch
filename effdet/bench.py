@@ -64,8 +64,9 @@ def _post_process(config, cls_outputs, box_outputs):
     return cls_outputs_all_after_topk, box_outputs_all_after_topk, indices_all, classes_all
 
 
-## wrap the model with post-proc for a clean DataParallel module boundary
 class _Wrapper(nn.Module):
+    """ Wrap the model with post-proc for a clean DataParallel module boundary
+    """
 
     def __init__(self, model, config):
         super(_Wrapper, self).__init__()
