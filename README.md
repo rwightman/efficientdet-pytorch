@@ -21,9 +21,10 @@ Initial code with working validation posted. Yes, it's a little slow, but I thin
 - [x] Basic MS COCO validation script
   - [x] Temporary (hacky) COCO dataset and transform 
   - [x] Port reference TF anchor and object detection code
-  - [x] Verify model output sanity (definitely signs of life with some valid predictions, has issues, likely alignment/padding/missed activation)
+  - [x] Verify model output sanity
   - [X] Integrate MSCOCO eval metric calcs
 - [x] Some cleanup, testing
+- [x] Submit to test-dev server, all good
 - [ ] Add torch hub support and pretrained URL based weight download
 - [ ] Change module dependencies from 'timm' to minimal 'geffnet' for backbone, bring some of the layers here
 - [ ] Remove redundant bias layers that exist in the official impl and weights
