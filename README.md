@@ -57,6 +57,8 @@ Before the COVID-19 madness changed priorities I was looking into signing up for
 
 ## Usage
 
+### Environment Setup
+
 Tested in a Python 3.7 or 3.8 conda environment in Linux with:
 * PyTorch 1.4
 * PyTorch Image Models (timm) 0.1.20, `pip install timm` or local install from (https://github.com/rwightman/pytorch-image-models) 
@@ -65,10 +67,33 @@ Tested in a Python 3.7 or 3.8 conda environment in Linux with:
 *NOTE* - There is a conflict/bug with Numpy 1.18+ and pycocotools, force install numpy <= 1.17.5 or the coco eval will fail,
 the validation script will still save the output JSON and that can be run through eval again later. 
 
+### Dataset Setup
+
+MSCOCO 2017 validation data:
+```
+wget http://images.cocodataset.org/zips/val2017.zip
+wget http://images.cocodataset.org/annotations/annotations_trainval2017.zip
+unzip val2017.zip
+unzip annotations_trainval2017.zip
+```
+
+MSCOCO 2017 test-dev data:
+```
+wget http://images.cocodataset.org/zips/test2017.zip
+unzip -q test2017.zip
+wget http://images.cocodataset.org/annotations/image_info_test2017.zip
+unzip image_info_test2017.zip
+```
+
+### Run COCO Evaluation
 
 Run validation (val2017 by default) with D2 model: `python validation.py /localtion/of/mscoco/ --model tf_efficientdet_d2 --checkpoint tf_efficientdet_d2.pth`
 
 Run test-dev2017: `python validation.py /localtion/of/mscoco/ --model tf_efficientdet_d2 --checkpoint tf_efficientdet_d2.pth --anno test-dev2017`
+
+### Run Inference
+
+TODO: Need an inference script
 
 ## Results
 
