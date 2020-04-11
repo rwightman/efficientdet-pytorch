@@ -17,14 +17,10 @@
 This module is borrowed from TPU RetinaNet implementation:
 https://github.com/tensorflow/tpu/blob/master/models/official/retinanet/anchors.py
 """
-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import collections
 import numpy as np
 import torch
+import torch.nn as nn
 from torchvision.ops.boxes import batched_nms, nms
 
 from effdet.object_detection import argmax_matcher
@@ -376,7 +372,7 @@ def generate_detections_pt(
     return detections
 
 
-class Anchors(object):
+class Anchors(nn.Module):
     """RetinaNet Anchors class."""
 
     def __init__(self, min_level, max_level, num_scales, aspect_ratios, anchor_scale, image_size):
@@ -402,6 +398,7 @@ class Anchors(object):
                 same dimension for width and height. The image_size should be divided by
                 the largest feature stride 2^max_level.
         """
+        super(Anchors, self).__init__()
         self.min_level = min_level
         self.max_level = max_level
         self.num_scales = num_scales
@@ -409,7 +406,7 @@ class Anchors(object):
         self.anchor_scale = anchor_scale
         self.image_size = image_size
         self.config = self._generate_configs()
-        self.boxes = self._generate_boxes()
+        self.register_buffer('boxes', self._generate_boxes())
 
     def _generate_configs(self):
         """Generate configurations of anchor boxes."""
@@ -502,11 +499,3 @@ class AnchorLabeler(object):
         num_positives = (matches.match_results != -1).float().sum()
 
         return cls_targets_dict, box_targets_dict, num_positives
-
-    def generate_detections(self, cls_outputs, box_outputs, indices, classes, image_id, image_scale):
-        # FIXME need to clean this awkward interface up
-        detections = generate_detections_np(
-            cls_outputs.cpu().numpy(), box_outputs.cpu().numpy(), self.anchors.boxes.cpu().numpy(),
-            indices.cpu().numpy(), classes.cpu().numpy(), image_id.cpu().numpy(), image_scale.cpu().numpy(),
-            self.num_classes)
-        return detections

@@ -6,7 +6,7 @@ Hacked together by Ross Wightman
 """
 import torch
 import torch.nn as nn
-from .anchors import Anchors, generate_detections_pt, MAX_DETECTION_POINTS
+from .anchors import Anchors, AnchorLabeler, generate_detections_pt, MAX_DETECTION_POINTS
 
 
 def _post_process(config, cls_outputs, box_outputs):
@@ -79,19 +79,14 @@ class DetBenchEval(nn.Module):
             config.min_level, config.max_level,
             config.num_scales, config.aspect_ratios,
             config.anchor_scale, config.image_size)
-        self._anchor_cache = dict()
 
     def forward(self, x, image_scales):
         class_out, box_out = self.model(x)
         class_out, box_out, indices, classes = _post_process(self.config, class_out, box_out)
 
-        anchor_boxes = self._anchor_cache.get(
-            class_out.device, self.anchors.boxes.to(device=class_out.device))
-
         batch_detections = []
         for i in range(x.shape[0]):
             detections = generate_detections_pt(
-                class_out[i], box_out[i], anchor_boxes, indices[i], classes[i], image_scales[i])
+                class_out[i], box_out[i], self.anchors.boxes, indices[i], classes[i], image_scales[i])
             batch_detections.append(detections)
         return torch.stack(batch_detections, dim=0)
-
