@@ -25,6 +25,7 @@ from __future__ import print_function
 import collections
 import numpy as np
 import torch
+from torchvision.ops.boxes import batched_nms, nms
 
 from effdet.object_detection import argmax_matcher
 from effdet.object_detection import box_list
@@ -50,7 +51,7 @@ def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
 
-def decode_box_outputs(rel_codes, anchors):
+def decode_box_outputs_np(rel_codes, anchors):
     """Transforms relative regression coordinates to absolute positions.
 
     Network predictions are normalized and relative to a given anchor; this
@@ -82,7 +83,43 @@ def decode_box_outputs(rel_codes, anchors):
     return np.column_stack([ymin, xmin, ymax, xmax])
 
 
-def nms(dets, thresh):
+def decode_box_outputs_pt(rel_codes, anchors, output_xyxy=False):
+    """Transforms relative regression coordinates to absolute positions.
+
+    Network predictions are normalized and relative to a given anchor; this
+    reverses the transformation and outputs absolute coordinates for the input image.
+
+    Args:
+        rel_codes: box regression targets.
+
+        anchors: anchors on all feature levels.
+
+    Returns:
+        outputs: bounding boxes.
+
+    """
+    ycenter_a = (anchors[0] + anchors[2]) / 2
+    xcenter_a = (anchors[1] + anchors[3]) / 2
+    ha = anchors[2] - anchors[0]
+    wa = anchors[3] - anchors[1]
+    ty, tx, th, tw = rel_codes
+
+    w = torch.exp(tw) * wa
+    h = torch.exp(th) * ha
+    ycenter = ty * ha + ycenter_a
+    xcenter = tx * wa + xcenter_a
+    ymin = ycenter - h / 2.
+    xmin = xcenter - w / 2.
+    ymax = ycenter + h / 2.
+    xmax = xcenter + w / 2.
+    if output_xyxy:
+        out = torch.stack([xmin, ymin, xmax, ymax], dim=1)
+    else:
+        out = torch.stack([ymin, xmin, ymax, xmax], dim=1)
+    return out
+
+
+def nms_np(dets, thresh):
     """Non-maximum suppression."""
     x1 = dets[:, 0]
     y1 = dets[:, 1]
@@ -189,7 +226,7 @@ def _generate_anchor_boxes(image_size, anchor_scale, anchor_configs):
     return anchor_boxes
 
 
-def generate_detections(
+def generate_detections_np(
         cls_outputs, box_outputs, anchor_boxes, indices, classes, image_id, image_scale, num_classes):
     """Generates detections with RetinaNet model outputs and anchors.
 
@@ -226,7 +263,7 @@ def generate_detections(
     scores = sigmoid(cls_outputs)
 
     # apply bounding box regression to anchors
-    boxes = decode_box_outputs(box_outputs.swapaxes(0, 1), anchor_boxes.swapaxes(0, 1))
+    boxes = decode_box_outputs_np(box_outputs.swapaxes(0, 1), anchor_boxes.swapaxes(0, 1))
     boxes = boxes[:, [1, 0, 3, 2]]
 
     # run class-wise nms
@@ -242,7 +279,7 @@ def generate_detections(
         # (nms) for boxes in the same class. The selected boxes from each class are
         # then concatenated for the final detection outputs.
         all_detections_cls = np.column_stack((boxes_cls, scores_cls))
-        top_detection_idx = nms(all_detections_cls, 0.5)
+        top_detection_idx = nms_np(all_detections_cls, 0.5)
         top_detections_cls = all_detections_cls[top_detection_idx]
         top_detections_cls[:, 2] -= top_detections_cls[:, 0]
         top_detections_cls[:, 3] -= top_detections_cls[:, 1]
@@ -275,6 +312,67 @@ def generate_detections(
         detections = _generate_dummy_detections(MAX_DETECTIONS_PER_IMAGE)
         detections[:, 1:5] *= image_scale
 
+    return detections
+
+
+def generate_detections_pt(
+        cls_outputs, box_outputs, anchor_boxes, indices, classes, image_scale):
+    """Generates detections with RetinaNet model outputs and anchors.
+
+    Args:
+        cls_outputs: a torch tensor with shape [N, 1], which has the highest class
+            scores on all feature levels. The N is the number of selected
+            top-K total anchors on all levels.  (k being MAX_DETECTION_POINTS)
+
+        box_outputs: a torch tensor with shape [N, 4], which stacks box regression
+            outputs on all feature levels. The N is the number of selected top-k
+            total anchors on all levels. (k being MAX_DETECTION_POINTS)
+
+        anchor_boxes: a torch tensor with shape [N, 4], which stacks anchors on all
+            feature levels. The N is the number of selected top-k total anchors on all levels.
+
+        indices: a torch tensor with shape [N], which is the indices from top-k selection.
+
+        classes: a torch tensor with shape [N], which represents the class
+            prediction on all selected anchors from top-k selection.
+
+        image_scale: a float tensor representing the scale between original image
+            and input image for the detector. It is used to rescale detections for
+            evaluating with the original groundtruth annotations.
+
+    Returns:
+        detections: detection results in a tensor with shape [MAX_DETECTION_POINTS, 6],
+            each row representing [x, y, width, height, score, class]
+    """
+    anchor_boxes = anchor_boxes[indices, :]
+
+    # apply bounding box regression to anchors
+    boxes = decode_box_outputs_pt(box_outputs.T.float(), anchor_boxes.T, output_xyxy=True)
+
+    scores = cls_outputs.sigmoid().squeeze(1).float()
+    top_detection_idx = batched_nms(boxes, scores, classes, iou_threshold=0.5)
+
+    # keep only topk scoring predictions
+    top_detection_idx = top_detection_idx[:MAX_DETECTIONS_PER_IMAGE]
+    boxes = boxes[top_detection_idx]
+    scores = scores[top_detection_idx, None]
+    classes = classes[top_detection_idx, None]
+
+    # xyxy to xywh & rescale to original image
+    boxes[:, 2] -= boxes[:, 0]
+    boxes[:, 3] -= boxes[:, 1]
+    boxes *= image_scale
+
+    classes += 1  # back to class idx with background class = 0
+
+    # stack em and pad out to MAX_DETECTIONS_PER_IMAGE if necessary
+    detections = torch.cat([boxes, scores, classes.float()], dim=1)
+    if len(top_detection_idx) < MAX_DETECTIONS_PER_IMAGE:
+        detections = torch.cat([
+            detections,
+            torch.zeros(
+                (MAX_DETECTIONS_PER_IMAGE - len(top_detection_idx), 6), device=detections.device, dtype=detections.dtype)
+        ], dim=0)
     return detections
 
 
@@ -407,7 +505,7 @@ class AnchorLabeler(object):
 
     def generate_detections(self, cls_outputs, box_outputs, indices, classes, image_id, image_scale):
         # FIXME need to clean this awkward interface up
-        detections = generate_detections(
+        detections = generate_detections_np(
             cls_outputs.cpu().numpy(), box_outputs.cpu().numpy(), self.anchors.boxes.cpu().numpy(),
             indices.cpu().numpy(), classes.cpu().numpy(), image_id.cpu().numpy(), image_scale.cpu().numpy(),
             self.num_classes)

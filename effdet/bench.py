@@ -6,7 +6,7 @@ Hacked together by Ross Wightman
 """
 import torch
 import torch.nn as nn
-from .anchors import Anchors, generate_detections, MAX_DETECTION_POINTS
+from .anchors import Anchors, generate_detections_pt, MAX_DETECTION_POINTS
 
 
 def _post_process(config, cls_outputs, box_outputs):
@@ -70,52 +70,28 @@ def _post_process(config, cls_outputs, box_outputs):
     return cls_outputs_all_after_topk, box_outputs_all_after_topk, indices_all, classes_all
 
 
-class _Wrapper(nn.Module):
-    """ Wrap the model with post-proc for a clean DataParallel module boundary
-    """
-
-    def __init__(self, model, config):
-        super(_Wrapper, self).__init__()
-        self.model = model
-        self.config = config
-
-    def forward(self, x):
-        x = self.model(x)
-        return _post_process(self.config, *x)
-
-
 class DetBenchEval(nn.Module):
     def __init__(self, model, config):
         super(DetBenchEval, self).__init__()
         self.config = config
-        self.model = _Wrapper(model, config)
+        self.model = model
         self.anchors = Anchors(
             config.min_level, config.max_level,
             config.num_scales, config.aspect_ratios,
             config.anchor_scale, config.image_size)
-        self._anchor_cache = None
+        self._anchor_cache = dict()
 
-    def forward(self, x, image_ids, image_scales):
-        class_out, box_out, indices, classes = self.model(x)
+    def forward(self, x, image_scales):
+        class_out, box_out = self.model(x)
+        class_out, box_out, indices, classes = _post_process(self.config, class_out, box_out)
 
-        # FIXME do this in PyTorch
+        anchor_boxes = self._anchor_cache.get(
+            class_out.device, self.anchors.boxes.to(device=class_out.device))
+
         batch_detections = []
-        class_out = class_out.cpu().numpy()
-        box_out = box_out.cpu().numpy()
-        if self._anchor_cache is None:
-            anchor_boxes = self.anchors.boxes.cpu().numpy()
-            self._anchor_cache = anchor_boxes
-        else:
-            anchor_boxes = self._anchor_cache
-        indices = indices.cpu().numpy()
-        classes = classes.cpu().numpy()
-        image_ids = image_ids.cpu().numpy()
-        image_scale = image_scales.cpu().numpy()
         for i in range(x.shape[0]):
-            detections = generate_detections(
-                class_out[i], box_out[i], anchor_boxes, indices[i], classes[i],
-                image_ids[i], image_scale[i], self.config.num_classes)
+            detections = generate_detections_pt(
+                class_out[i], box_out[i], anchor_boxes, indices[i], classes[i], image_scales[i])
             batch_detections.append(detections)
-
-        return batch_detections
+        return torch.stack(batch_detections, dim=0)
 

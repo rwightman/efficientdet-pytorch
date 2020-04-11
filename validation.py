@@ -37,7 +37,7 @@ parser.add_argument('--anno', default='val2017',
 parser.add_argument('--model', '-m', metavar='MODEL', default='tf_efficientdet_d1',
                     help='model architecture (default: tf_efficientdet_d1)')
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
-                    help='number of data loading workers (default: 2)')
+                    help='number of data loading workers (default: 4)')
 parser.add_argument('-b', '--batch-size', default=32, type=int,
                     metavar='N', help='mini-batch size (default: 256)')
 parser.add_argument('--img-size', default=None, type=int,
@@ -78,16 +78,18 @@ def validate(args):
         load_checkpoint(model, args.checkpoint)
 
     param_count = sum([m.numel() for m in model.parameters()])
-    logging.info('Model %s created, param count: %d' % (args.model, param_count))
+    print('Model %s created, param count: %d' % (args.model, param_count))
 
     bench = DetBenchEval(model, config)
-
-    bench.model = bench.model.cuda()
+    bench = bench.cuda()
     if has_amp:
-        bench.model = amp.initialize(bench.model, opt_level='O1')
+        print('Using AMP mixed precision.')
+        bench = amp.initialize(bench, opt_level='O1')
+    else:
+        print('AMP not installed, running network in FP32.')
 
     if args.num_gpu > 1:
-        bench.model = torch.nn.DataParallel(bench.model, device_ids=list(range(args.num_gpu)))
+        bench = torch.nn.DataParallel(bench, device_ids=list(range(args.num_gpu)))
 
     if 'test' in args.anno:
         annotation_path = os.path.join(args.data, 'annotations', f'image_info_{args.anno}.json')
@@ -112,17 +114,20 @@ def validate(args):
     end = time.time()
     with torch.no_grad():
         for i, (input, target) in enumerate(loader):
-            output = bench(input, target['img_id'], target['scale'])
-            for batch_out in output:
-                for det in batch_out:
-                    image_id = int(det[0])
-                    score = float(det[5])
-                    coco_det = {
-                        'image_id': image_id,
-                        'bbox': det[1:5].tolist(),
-                        'score': score,
-                        'category_id': int(det[6]),
-                    }
+            output = bench(input, target['scale'])
+            output = output.cpu()
+            sample_ids = target['img_id'].cpu()
+            for index, sample in enumerate(output):
+                image_id = int(sample_ids[index])
+                for det in sample:
+                    score = float(det[4])
+                    if score < .001:  # stop when below this threshold, scores in descending order
+                        break
+                    coco_det = dict(
+                        image_id=image_id,
+                        bbox=det[0:4].tolist(),
+                        score=score,
+                        category_id=int(det[5]))
                     img_ids.append(image_id)
                     results.append(coco_det)
 

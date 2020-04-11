@@ -10,6 +10,9 @@ I am aware there are other PyTorch implementations. Their approach didn't fit we
 
 ## Updates / Tasks
 
+### 2020-04-10
+Replace `generate_detections` with PyTorch impl using torchvision batched_nms. Significant performance increase with minor (+/-.001 mAP) score differences. Quite a bit faster than original TF impl on a GPU now.
+
 ### 2020-04-09
 Initial code with working validation posted. Yes, it's a little slow, but I think faster than the official impl on a GPU if you leave AMP enabled. Post processing needs some love. 
 
