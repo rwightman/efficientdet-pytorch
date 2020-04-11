@@ -87,17 +87,15 @@ def create_loader(
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
         num_workers=1,
-        tf_preprocessing=False
+        pin_mem=False,
 ):
     if isinstance(input_size, tuple):
         img_size = input_size[-2:]
     else:
         img_size = input_size
 
-    if tf_preprocessing and use_prefetcher:
-        from data.tf_preprocessing import TfPreprocessTransform
-        transform = TfPreprocessTransform(
-            is_training=is_training, size=img_size, interpolation=interpolation)
+    if is_training:
+        assert False, 'work in progress'
     else:
         transform = transforms_coco_eval(
             img_size,
@@ -113,6 +111,7 @@ def create_loader(
         batch_size=batch_size,
         shuffle=False,
         num_workers=num_workers,
+        pin_memory=pin_mem,
         collate_fn=fast_collate if use_prefetcher else torch.utils.data.dataloader.default_collate,
     )
     if use_prefetcher:

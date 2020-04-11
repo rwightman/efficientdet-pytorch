@@ -105,7 +105,8 @@ def validate(args):
         batch_size=args.batch_size,
         use_prefetcher=args.prefetcher,
         interpolation=args.interpolation,
-        num_workers=args.workers)
+        num_workers=args.workers,
+        pin_mem=args.pin_mem)
 
     img_ids = []
     results = []

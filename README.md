@@ -10,6 +10,9 @@ I am aware there are other PyTorch implementations. Their approach didn't fit we
 
 ## Updates / Tasks
 
+### 2020-04-11
+Cleanup post-processing. Less code and a five-fold throughput increase on the smaller models. D0 running > 130 img/s on a single 2080Ti, D1 > 130 img/s on dual 2080Ti up to D7 @ 8.5 img/s.
+
 ### 2020-04-10
 Replace `generate_detections` with PyTorch impl using torchvision batched_nms. Significant performance increase with minor (+/-.001 mAP) score differences. Quite a bit faster than original TF impl on a GPU now.
 
@@ -32,7 +35,7 @@ Initial code with working validation posted. Yes, it's a little slow, but I thin
 - [ ] Change module dependencies from 'timm' to minimal 'geffnet' for backbone, bring some of the layers here
 - [ ] Remove redundant bias layers that exist in the official impl and weights
 - [ ] Add visualization support
-- [ ] Performance improvements, numpy TF detection code -> optimized PyTorch
+- [x] Performance improvements, numpy TF detection code -> optimized PyTorch
 - [ ] Verify/fix Torchscript and ONNX export compatibility
 
 ### Possible Future Tasks
