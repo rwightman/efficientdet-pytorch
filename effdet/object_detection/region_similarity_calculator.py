@@ -32,8 +32,8 @@ def area(boxlist):
     Returns:
         a tensor with shape [N] representing box areas.
     """
-    y_min, x_min, y_max, x_max = boxlist.get().chunk(4, dim=1)
-    out = (y_max - y_min) * (x_max - x_min).squeeze(1)
+    y_min, x_min, y_max, x_max = boxlist.boxes.chunk(4, dim=1)
+    out = (y_max - y_min).squeeze(1) * (x_max - x_min).squeeze(1)
     return out
 
 
@@ -47,8 +47,8 @@ def intersection(boxlist1, boxlist2):
     Returns:
         a tensor with shape [N, M] representing pairwise intersections
     """
-    y_min1, x_min1, y_max1, x_max1 = boxlist1.get().chunk(4, dim=1)
-    y_min2, x_min2, y_max2, x_max2 = boxlist2.get().chunk(4, dim=1)
+    y_min1, x_min1, y_max1, x_max1 = boxlist1.boxes.chunk(4, dim=1)
+    y_min2, x_min2, y_max2, x_max2 = boxlist2.boxes.chunk(4, dim=1)
     all_pairs_min_ymax = torch.min(y_max1, y_max2.T)
     all_pairs_max_ymin = torch.max(y_min1, y_min2.T)
     intersect_heights = torch.clamp(all_pairs_min_ymax - all_pairs_max_ymin, min=0)
@@ -71,7 +71,7 @@ def iou(boxlist1, boxlist2):
     intersections = intersection(boxlist1, boxlist2)
     areas1 = area(boxlist1)
     areas2 = area(boxlist2)
-    unions = areas1.unsqueeze(1) + areas2.unsuqeeze(0) - intersections
+    unions = areas1.unsqueeze(1) + areas2.unsqueeze(0) - intersections
     return torch.where(intersections == 0.0, torch.zeros_like(intersections), intersections / unions)
 
 

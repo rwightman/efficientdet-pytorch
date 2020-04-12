@@ -130,14 +130,14 @@ def batch_decode(encoded_boxes, box_coder, anchors):
         ValueError: if batch sizes of the inputs are inconsistent, or if
         the number of anchors inferred from encoded_boxes and anchors are inconsistent.
     """
-    encoded_boxes.get_shape().assert_has_rank(3)
+    assert len(encoded_boxes.shape) == 3
     if encoded_boxes.shape[1] != anchors.num_boxes():
         raise ValueError('The number of anchors inferred from encoded_boxes'
                          ' and anchors are inconsistent: shape[1] of encoded_boxes'
                          ' %s should be equal to the number of anchors: %s.' %
-                         (encoded_boxes.shape[1], anchors.num_boxes_static()))
+                         (encoded_boxes.shape[1], anchors.num_boxes()))
 
     decoded_boxes = torch.stack([
-        box_coder.decode(boxes, anchors).get() for boxes in encoded_boxes.unbind()
+        box_coder.decode(boxes, anchors).boxes for boxes in encoded_boxes.unbind()
     ])
     return decoded_boxes

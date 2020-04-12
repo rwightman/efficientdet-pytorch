@@ -83,7 +83,17 @@ class DetBenchTrain(nn.Module):
 
     def forward(self, x, gt_boxes, gt_labels):
         class_out, box_out = self.model(x)
-        gt_class_out, gt_box_out, num_positive = self.anchor_labeler.label_anchors(gt_boxes, gt_labels)
         loss = None
-        # compute loss
+        gcl = []
+        gbl = []
+        total_positive = 0
+        # FIXME the per-sample organization of reference code less than desirable, should change to batched
+        for i in range(x.shape[0]):
+            gt_class_out, gt_box_out, num_positive = self.anchor_labeler.label_anchors(gt_boxes[i], gt_labels[i])
+            gcl.append(gt_class_out)
+            gbl.append(gt_box_out)
+            total_positive += num_positive
+
+        # FIXME compute loss
+
         return loss

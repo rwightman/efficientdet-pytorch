@@ -78,8 +78,7 @@ class ArgMaxMatcher(matcher.Matcher):
                 or if unmatched_threshold > matched_threshold.
         """
         if (matched_threshold is None) and (unmatched_threshold is not None):
-            raise ValueError('Need to also define matched_threshold when'
-                             'unmatched_threshold is defined')
+            raise ValueError('Need to also define matched_threshold when unmatched_threshold is defined')
         self._matched_threshold = matched_threshold
         if unmatched_threshold is None:
             self._unmatched_threshold = matched_threshold
@@ -130,8 +129,8 @@ class ArgMaxMatcher(matcher.Matcher):
                 # Get logical indices of ignored and unmatched columns as tf.int64
                 matched_vals = torch.max(similarity_matrix, 0)[0]
                 below_unmatched_threshold = self._unmatched_threshold > matched_vals
-                between_thresholds = \
-                    matched_vals >= self._unmatched_threshold & self._matched_threshold > matched_vals
+                between_thresholds = (matched_vals >= self._unmatched_threshold) & \
+                                     (self._matched_threshold > matched_vals)
 
                 if self._negatives_lower_than_unmatched:
                     matches = self._set_values_using_indicator(matches, below_unmatched_threshold, -1)

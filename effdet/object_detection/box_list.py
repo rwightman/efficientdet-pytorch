@@ -48,7 +48,7 @@ class BoxList(object):
         Raises:
             ValueError: if invalid dimensions for bbox data or if bbox data is not in float32 format.
         """
-        if len(boxes.get_shape()) != 2 or boxes.get_shape()[-1] != 4:
+        if len(boxes.shape) != 2 or boxes.shape[-1] != 4:
             raise ValueError('Invalid dimensions for box data.')
         if boxes.dtype != torch.float32:
             raise ValueError('Invalid tensor type: should be tf.float32')
@@ -84,7 +84,8 @@ class BoxList(object):
     def has_field(self, field):
         return field in self.data
 
-    def get(self):
+    @property
+    def boxes(self):
         """Convenience function for accessing box coordinates.
 
         Returns:
@@ -92,7 +93,8 @@ class BoxList(object):
         """
         return self.get_field('boxes')
 
-    def set(self, boxes):
+    @boxes.setter
+    def boxes(self, boxes):
         """Convenience function for setting box coordinates.
 
         Args:
@@ -146,7 +148,7 @@ class BoxList(object):
         Returns:
             a list of 4 1-D tensors [ycenter, xcenter, height, width].
         """
-        box_corners = self.get()
+        box_corners = self.boxes
         ymin, xmin, ymax, xmax = box_corners.T.unbind()
         width = xmax - xmin
         height = ymax - ymin
@@ -158,8 +160,8 @@ class BoxList(object):
         """Transpose the coordinate representation in a boxlist.
 
         """
-        y_min, x_min, y_max, x_max = self.get().chunk(4, dim=1)
-        self.set(torch.cat([x_min, y_min, x_max, y_max], 1))
+        y_min, x_min, y_max, x_max = self.boxes.chunk(4, dim=1)
+        self.boxes = torch.cat([x_min, y_min, x_max, y_max], 1)
 
     def as_tensor_dict(self, fields=None):
         """Retrieves specified fields as a dictionary of tensors.
@@ -182,3 +184,7 @@ class BoxList(object):
                 raise ValueError('boxlist must contain all specified fields')
             tensor_dict[field] = self.get_field(field)
         return tensor_dict
+
+    @property
+    def device(self):
+        return self.data['boxes'].device

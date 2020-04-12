@@ -1,3 +1,10 @@
+""" RetinaNet / EfficientDet Anchor Gen
+
+Adapted for PyTorch from Tensorflow impl at
+    https://github.com/google/automl/blob/6f6694cec1a48cdb33d5d1551a2d5db8ad227798/efficientdet/anchors.py
+
+Hacked together by Ross Wightman, original copyright below
+"""
 # Copyright 2020 Google Research. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -155,8 +162,7 @@ def _generate_anchor_boxes(image_size, anchor_scale, anchor_configs):
     return anchor_boxes
 
 
-def generate_detections(
-        cls_outputs, box_outputs, anchor_boxes, indices, classes, image_scale):
+def generate_detections(cls_outputs, box_outputs, anchor_boxes, indices, classes, image_scale):
     """Generates detections with RetinaNet model outputs and anchors.
 
     Args:
@@ -267,7 +273,7 @@ class Anchors(nn.Module):
 
 
 # FIXME PyTorch port of this class and subclasses not tested yet, needed for training
-class AnchorLabeler(object):
+class AnchorLabeler(nn.Module):
     """Labeler for multiscale anchor boxes.
     """
 
@@ -282,6 +288,7 @@ class AnchorLabeler(object):
             match_threshold: float number between 0 and 1 representing the threshold
                 to assign positive labels for anchors.
         """
+        super(AnchorLabeler, self).__init__()
         similarity_calc = region_similarity_calculator.IouSimilarity()
         matcher = argmax_matcher.ArgMaxMatcher(
             match_threshold,
@@ -297,15 +304,16 @@ class AnchorLabeler(object):
 
     def _unpack_labels(self, labels):
         """Unpacks an array of labels into multiscales labels."""
-        labels_unpacked = collections.OrderedDict()
+        labels_unpacked = []
         anchors = self.anchors
         count = 0
         for level in range(anchors.min_level, anchors.max_level + 1):
             feat_size = int(anchors.image_size / 2 ** level)
             steps = feat_size ** 2 * anchors.get_anchors_per_location()
-            indices = torch.arange(count, count + steps)
+            indices = torch.arange(count, count + steps, device=labels.device)
             count += steps
-            labels_unpacked[level] = torch.gather(labels, 0, indices).view([feat_size, feat_size, -1])
+            labels_unpacked.append(
+                torch.index_select(labels, 0, indices).view([feat_size, feat_size, -1]))
         return labels_unpacked
 
     def label_anchors(self, gt_boxes, gt_labels):
@@ -332,8 +340,7 @@ class AnchorLabeler(object):
         anchor_box_list = box_list.BoxList(self.anchors.boxes)
 
         # cls_weights, box_weights are not used
-        cls_targets, _, box_targets, _, matches = self.target_assigner.assign(
-            anchor_box_list, gt_box_list, gt_labels)
+        cls_targets, _, box_targets, _, matches = self.target_assigner.assign(anchor_box_list, gt_box_list, gt_labels)
 
         # class labels start from 1 and the background class = -1
         cls_targets -= 1

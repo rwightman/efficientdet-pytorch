@@ -55,7 +55,7 @@ class Match(object):
         Raises:
             ValueError: if match_results does not have rank 1 or is not an integer int32 scalar tensor
         """
-        if match_results.shape.ndims != 1:
+        if len(match_results.shape) != 1:
             raise ValueError('match_results should have rank 1')
         if match_results.dtype not in (torch.int32, torch.int64):
             raise ValueError('match_results should be an int32 or int64 scalar tensor')
@@ -157,8 +157,7 @@ class Match(object):
         Returns:
             row_indices: int32 tensor of shape [K] with row indices.
         """
-        return self._reshape_and_cast(
-            torch.gather(self._match_results, 0, self.matched_column_indices()))
+        return self._reshape_and_cast(torch.gather(self._match_results, 0, self.matched_column_indices()))
 
     def _reshape_and_cast(self, t):
         return torch.reshape(t, [-1]).long()
@@ -166,9 +165,8 @@ class Match(object):
     def gather_based_on_match(self, input_tensor, unmatched_value, ignored_value):
         """Gathers elements from `input_tensor` based on match results.
 
-        For columns that are matched to a row, gathered_tensor[col] is set to
-        input_tensor[match_results[col]]. For columns that are unmatched,
-        gathered_tensor[col] is set to unmatched_value. Finally, for columns that
+        For columns that are matched to a row, gathered_tensor[col] is set to input_tensor[match_results[col]].
+        For columns that are unmatched, gathered_tensor[col] is set to unmatched_value. Finally, for columns that
         are ignored gathered_tensor[col] is set to ignored_value.
 
         Note that the input_tensor.shape[1:] must match with unmatched_value.shape
@@ -183,9 +181,10 @@ class Match(object):
             gathered_tensor: A tensor containing values gathered from input_tensor.
                 The shape of the gathered tensor is [match_results.shape[0]] + input_tensor.shape[1:].
         """
-        input_tensor = torch.cat([torch.stack([ignored_value, unmatched_value]), input_tensor], dim=0)
+        ss = torch.stack([ignored_value, unmatched_value])
+        input_tensor = torch.cat([ss, input_tensor], dim=0)
         gather_indices = torch.clamp(self.match_results + 2, min=0)
-        gathered_tensor = torch.gather(input_tensor, 0, gather_indices)
+        gathered_tensor = torch.index_select(input_tensor, 0, gather_indices)
         return gathered_tensor
 
 
