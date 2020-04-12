@@ -99,10 +99,7 @@ class CocoDetection(data.Dataset):
             else:
                 bboxes_ignore = np.zeros((0, 4), dtype=np.float32)
 
-        ann = dict(
-            img_id=img_id,
-            bbox=bboxes,
-            cls=cls)
+        ann = dict(img_id=img_id, bbox=bboxes, cls=cls)
 
         if self.include_bboxes_ignore:
             ann['bbox_ignore'] = bboxes_ignore

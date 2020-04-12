@@ -5,6 +5,7 @@ Hacked together by Ross Wightman
 import torch
 from PIL import Image
 import numpy as np
+import random
 
 IMAGENET_DEFAULT_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_DEFAULT_STD = (0.229, 0.224, 0.225)
@@ -93,6 +94,112 @@ class ResizePad:
         return new_img, annotations
 
 
+class RandomResizePad:
+
+    def __init__(self, target_size: int, scale: tuple = (0.1, 2.0), interpolation: str = 'bilinear'):
+        self.target_size = target_size
+        self.scale = scale
+        self.interpolation = interpolation
+
+    def _get_params(self):
+        # Select a random scale factor.
+        scale_factor = random.uniform(*self.scale)
+        offset_y_factor = random.random()
+        offset_x_factor
+        scaled_size = int(random_scale_factor * self._output_size)
+
+        # Recompute the accurate scale_factor using rounded scaled image size.
+        height = tf.shape(self._image)[0]
+        width = tf.shape(self._image)[1]
+        max_image_size = tf.to_float(tf.maximum(height, width))
+        image_scale = tf.to_float(scaled_size) / max_image_size
+
+        # Select non-zero random offset (x, y) if scaled image is larger than
+        # self._output_size.
+        scaled_height = tf.to_int32(tf.to_float(height) * image_scale)
+        scaled_width = tf.to_int32(tf.to_float(width) * image_scale)
+        offset_y = tf.to_float(scaled_height - self._output_size)
+        offset_x = tf.to_float(scaled_width - self._output_size)
+        offset_y = tf.maximum(0.0, offset_y) * tf.random_uniform([], 0, 1)
+        offset_x = tf.maximum(0.0, offset_x) * tf.random_uniform([], 0, 1)
+        offset_y = tf.to_int32(offset_y)
+        offset_x = tf.to_int32(offset_x)
+        self._image_scale = image_scale
+
+    def __call__(self, img, annotations: dict):
+        width, height = img.size
+        if height > width:
+            scale = self.target_size / height
+            scaled_height = self.target_size
+            scaled_width = int(width * scale)
+        else:
+            scale = self.target_size / width
+            scaled_height = int(height * scale)
+            scaled_width = self.target_size
+
+        new_img = Image.new("RGB", (self.target_size, self.target_size))
+        interp_method = _pil_interp(self.interpolation)
+        img = img.resize((scaled_width, scaled_height), interp_method)
+        new_img.paste(img)
+
+        if 'bbox' in annotations:
+            # FIXME haven't tested this path since not currently using dataset annotations for train/eval
+            bbox = annotations['bbox']
+            bbox[:, :4] *= scale
+            bbox = clip_boxes(bbox, (scaled_height, scaled_width))
+            indices = np.where(np.sum(bbox, axis=1) != 0)[0]
+            if len(indices) < len(bbox):
+                bbox = np.take(bbox, indices)
+                annotations['cls'] = np.take(annotations['cls'], indices)
+            annotations['bbox'] = bbox
+
+        annotations['scale'] = 1. / scale  # back to original
+
+        return new_img, annotations
+
+
+class RandomFlip:
+
+    def __init__(self, horizontal=True, vertical=False, prob=0.5):
+        self.horizontal = horizontal
+        self.vertical = vertical
+        self.prob = prob
+
+    def _get_params(self):
+        do_horizontal = random.random() < self.prob if self.horizontal else False
+        do_vertical = random.random() < self.prob if self.vertical else False
+        return do_horizontal, do_vertical
+
+    def __call__(self, img, annotations: dict):
+        do_horizontal, do_vertical = self._get_params()
+        width, height = img.size
+
+        if do_horizontal and do_vertical:
+            img = img.transpose(Image.ROTATE_180)
+            if 'bbox' in annotations:
+                bbox = annotations['bbox']
+                bbox[:, 0] = height - bbox[:, 0]
+                bbox[:, 2] = height - bbox[:, 2]
+                bbox[:, 1] = width - bbox[:, 1]
+                bbox[:, 3] = width - bbox[:, 3]
+                annotations['bbox'] = bbox
+        elif do_horizontal:
+            img = img.transpose(Image.FLIP_LEFT_RIGHT)
+            if 'bbox' in annotations:
+                bbox = annotations['bbox']
+                bbox[:, 1] = width - bbox[:, 1]
+                bbox[:, 3] = width - bbox[:, 3]
+                annotations['bbox'] = bbox
+        elif do_vertical:
+            img = img.transpose(Image.FLIP_TOP_BOTTOM)
+            if 'bbox' in annotations:
+                bbox = annotations['bbox']
+                bbox[:, 0] = height - bbox[:, 0]
+                bbox[:, 2] = height - bbox[:, 2]
+                annotations['bbox'] = bbox
+
+        return img, annotations
+
 class Compose:
 
     def __init__(self, transforms: list):
@@ -112,6 +219,25 @@ def transforms_coco_eval(
         std=IMAGENET_DEFAULT_STD):
 
     image_tfl = [
+        ResizePad(target_size=img_size, interpolation=interpolation),
+        ImageToNumpy(),
+    ]
+
+    assert use_prefetcher, "Only supporting prefetcher usage right now"
+
+    image_tf = Compose(image_tfl)
+    return image_tf
+
+
+def transforms_coco_train(
+        img_size=224,
+        interpolation='random',
+        use_prefetcher=False,
+        mean=IMAGENET_DEFAULT_MEAN,
+        std=IMAGENET_DEFAULT_STD):
+
+    image_tfl = [
+        RandomFlip(horizontal=True, prob=0.5),
         ResizePad(target_size=img_size, interpolation=interpolation),
         ImageToNumpy(),
     ]

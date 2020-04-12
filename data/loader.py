@@ -4,6 +4,7 @@ Hacked together by Ross Wightman
 """
 import torch.utils.data
 from .transforms import *
+from timm.data.distributed_sampler import OrderedDistributedSampler
 
 
 MAX_NUM_INSTANCES = 100
@@ -87,6 +88,7 @@ def create_loader(
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD,
         num_workers=1,
+        distributed=False,
         pin_mem=False,
 ):
     if isinstance(input_size, tuple):
@@ -95,7 +97,12 @@ def create_loader(
         img_size = input_size
 
     if is_training:
-        assert False, 'work in progress'
+        transform = transforms_coco_train(
+            img_size,
+            interpolation=interpolation,
+            use_prefetcher=use_prefetcher,
+            mean=mean,
+            std=std)
     else:
         transform = transforms_coco_eval(
             img_size,
@@ -106,11 +113,21 @@ def create_loader(
 
     dataset.transform = transform
 
+    sampler = None
+    if distributed:
+        if is_training:
+            sampler = torch.utils.data.distributed.DistributedSampler(dataset)
+        else:
+            # This will add extra duplicate entries to result in equal num
+            # of samples per-process, will slightly alter validation results
+            sampler = OrderedDistributedSampler(dataset)
+
     loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,
         shuffle=False,
         num_workers=num_workers,
+        sampler=sampler,
         pin_memory=pin_mem,
         collate_fn=fast_collate if use_prefetcher else torch.utils.data.dataloader.default_collate,
     )

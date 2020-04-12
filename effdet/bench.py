@@ -5,6 +5,7 @@ Hacked together by Ross Wightman
 import torch
 import torch.nn as nn
 from .anchors import Anchors, AnchorLabeler, generate_detections, MAX_DETECTION_POINTS
+from .loss import DetectionLoss
 
 
 def _post_process(config, cls_outputs, box_outputs):
@@ -79,21 +80,19 @@ class DetBenchTrain(nn.Module):
             config.num_scales, config.aspect_ratios,
             config.anchor_scale, config.image_size)
         self.anchor_labeler = AnchorLabeler(anchors, config.num_classes, match_threshold=0.5)
-        self.loss_fn = None
+        self.loss_fn = DetectionLoss(self.config)
 
     def forward(self, x, gt_boxes, gt_labels):
         class_out, box_out = self.model(x)
-        loss = None
-        gcl = []
-        gbl = []
-        total_positive = 0
-        # FIXME the per-sample organization of reference code less than desirable, should change to batched
+
+        cls_targets = []
+        box_targets = []
+        num_positives = []
+        # FIXME this may be a bottleneck, would be faster if batched, or should be done in loader/dataset?
         for i in range(x.shape[0]):
             gt_class_out, gt_box_out, num_positive = self.anchor_labeler.label_anchors(gt_boxes[i], gt_labels[i])
-            gcl.append(gt_class_out)
-            gbl.append(gt_box_out)
-            total_positive += num_positive
+            cls_targets.append(gt_class_out)
+            box_targets.append(gt_box_out)
+            num_positives.append(num_positive)
 
-        # FIXME compute loss
-
-        return loss
+        return self.loss_fn(class_out, box_out, cls_targets, box_targets, num_positives)

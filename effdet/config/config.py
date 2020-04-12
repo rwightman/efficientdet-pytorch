@@ -130,30 +130,6 @@ def default_detection_configs():
     h.anchor_scale = 4.0
     h.pad_type = 'same'
 
-    # is batchnorm training mode
-    h.is_training_bn = True
-
-    # optimization
-    h.momentum = 0.9
-    h.learning_rate = 0.08
-    h.lr_warmup_init = 0.008
-    h.lr_warmup_epoch = 1.0
-    h.first_lr_drop_epoch = 200.0
-    h.second_lr_drop_epoch = 250.0
-    h.clip_gradients_norm = 10.0
-    h.num_epochs = 300
-
-    # classification loss
-    h.alpha = 0.25
-    h.gamma = 1.5
-
-    # localization loss
-    h.delta = 0.1
-    h.box_loss_weight = 50.0
-
-    # regularization l2 loss.
-    h.weight_decay = 4e-5
-
     # For detection.
     h.box_class_repeats = 3
     h.fpn_cell_repeats = 3
@@ -169,9 +145,31 @@ def default_detection_configs():
     h.fpn_name = None
     h.fpn_config = None
 
+    # FIXME move config below this point to a different config, add hierarchy, or use args as I usually do?
+
     # No stochastic depth in default.
-    h.survival_prob = None  # FIXME remove
     h.drop_path_rate = 0.
+
+    # optimization
+    h.momentum = 0.9
+    h.learning_rate = 0.08
+    h.lr_warmup_init = 0.008
+    h.lr_warmup_epoch = 1.0
+    h.first_lr_drop_epoch = 200.0
+    h.second_lr_drop_epoch = 250.0
+    h.clip_gradients_norm = 10.0
+    h.num_epochs = 300
+
+    # regularization l2 loss.
+    h.weight_decay = 4e-5
+
+    # classification loss
+    h.alpha = 0.25
+    h.gamma = 1.5
+
+    # localization loss
+    h.delta = 0.1
+    h.box_loss_weight = 50.0
 
     h.lr_decay_method = 'cosine'
     h.moving_average_decay = 0.9998
@@ -179,8 +177,6 @@ def default_detection_configs():
     h.backbone_name = 'tf_efficientnet_b1'
     h.backbone_config = None
 
-    # RetinaNet.
-    h.resnet_depth = 50
     return h
 
 
