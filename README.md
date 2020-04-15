@@ -10,6 +10,9 @@ I am aware there are other PyTorch implementations. Their approach didn't fit we
 
 ## Updates / Tasks
 
+### 2020-4-15 
+Taking a pause on training, some high priority things came up. There are signs of life on the training branch, was working the basic augs before priority switch, loss fn appeared to be doing something sane with distributed training working, no proper eval yet, init not correct yet. I will get to it, with SOTA training config and good performance as the end goal (as with my EfficientNet work). 
+
 ### 2020-04-11
 Cleanup post-processing. Less code and a five-fold throughput increase on the smaller models. D0 running > 130 img/s on a single 2080Ti, D1 > 130 img/s on dual 2080Ti up to D7 @ 8.5 img/s.
 
@@ -32,7 +35,7 @@ Initial code with working validation posted. Yes, it's a little slow, but I thin
 - [x] Some cleanup, testing
 - [x] Submit to test-dev server, all good
 - [ ] Add torch hub support and pretrained URL based weight download
-- [ ] Change module dependencies from 'timm' to minimal 'geffnet' for backbone, bring some of the layers here
+- [ ] ~~Change module dependencies from 'timm' to minimal 'geffnet' for backbone, bring some of the layers here~~ leaving as `timm` for now, as the training code will use many `timm` functions that I leverage to reproduce SOTA EfficientNet training in PyTorch
 - [ ] Remove redundant bias layers that exist in the official impl and weights
 - [ ] Add visualization support
 - [x] Performance improvements, numpy TF detection code -> optimized PyTorch
@@ -46,7 +49,7 @@ Initial code with working validation posted. Yes, it's a little slow, but I thin
 - [ ] Addition and cleanup of OpenImages dataset/training support from a past project
 - [ ] Exploration of instance segmentation possibilities...
 
-Before the COVID-19 madness changed priorities I was looking into signing up for GitHub Sponsors. I've decided for now to focus on building. However, if you are an organization interested in sponsoring and any of this work, or prioritization of the possible future directions interests you, feel free to contact me (issue, LinkedIn, Twitter, hello at rwightman dot com)
+If you are an organization is interested in sponsoring and any of this work, or prioritization of the possible future directions interests you, feel free to contact me (issue, LinkedIn, Twitter, hello at rwightman dot com). I will setup a github sponser if there is any interest.
 
 ## Models
 
