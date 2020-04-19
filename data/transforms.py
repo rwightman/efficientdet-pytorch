@@ -56,106 +56,102 @@ def clip_boxes(boxes, img_size):
     return boxes
 
 
+def clip_boxes_remove_empty(boxes, classes, img_size):
+    boxes = clip_boxes(boxes, img_size)
+    indices = np.where(np.sum(boxes, axis=1) != 0)[0]
+    if len(indices) < len(boxes):
+        boxes = boxes[indices, :]
+        classes = classes[indices]
+    return boxes, classes
+
+
+def _size_tuple(size):
+    if isinstance(size, int):
+        return size, size
+    else:
+        assert len(size) == 2
+        return size
+
+
 class ResizePad:
 
     def __init__(self, target_size: int, interpolation: str = 'bilinear'):
-        self.target_size = target_size
+        self.target_size = _size_tuple(target_size)
         self.interpolation = interpolation
 
-    def __call__(self, img, annotations: dict):
+    def __call__(self, img, anno: dict):
         width, height = img.size
-        if height > width:
-            scale = self.target_size / height
-            scaled_height = self.target_size
-            scaled_width = int(width * scale)
-        else:
-            scale = self.target_size / width
-            scaled_height = int(height * scale)
-            scaled_width = self.target_size
 
-        new_img = Image.new("RGB", (self.target_size, self.target_size))
+        img_scale_y = self.target_size[0] / height
+        img_scale_x = self.target_size[1] / width
+        img_scale = min(img_scale_y, img_scale_x)
+        scaled_h = int(height * img_scale)
+        scaled_w = int(width * img_scale)
+
+        new_img = Image.new("RGB", (self.target_size[1], self.target_size[0]))
         interp_method = _pil_interp(self.interpolation)
-        img = img.resize((scaled_width, scaled_height), interp_method)
+        img = img.resize((scaled_w, scaled_h), interp_method)
         new_img.paste(img)
 
-        if 'bbox' in annotations:
+        if 'bbox' in anno:
             # FIXME haven't tested this path since not currently using dataset annotations for train/eval
-            bbox = annotations['bbox']
-            bbox[:, :4] *= scale
-            bbox = clip_boxes(bbox, (scaled_height, scaled_width))
-            indices = np.where(np.sum(bbox, axis=1) != 0)[0]
-            if len(indices) < len(bbox):
-                bbox = np.take(bbox, indices)
-                annotations['cls'] = np.take(annotations['cls'], indices)
-            annotations['bbox'] = bbox
+            bbox = anno['bbox']
+            bbox[:, :4] *= img_scale
+            anno['bbox'], anno['cls'] = clip_boxes_remove_empty(bbox, anno['cls'], (scaled_h, scaled_w))
 
-        annotations['scale'] = 1. / scale  # back to original
+        anno['scale'] = 1. / img_scale  # back to original
 
-        return new_img, annotations
+        return new_img, anno
 
 
 class RandomResizePad:
 
     def __init__(self, target_size: int, scale: tuple = (0.1, 2.0), interpolation: str = 'bilinear'):
-        self.target_size = target_size
+        self.target_size = _size_tuple(target_size)
         self.scale = scale
         self.interpolation = interpolation
 
-    def _get_params(self):
+    def _get_params(self, img):
         # Select a random scale factor.
         scale_factor = random.uniform(*self.scale)
-        offset_y_factor = random.random()
-        offset_x_factor
-        scaled_size = int(random_scale_factor * self._output_size)
+        scaled_target_height = scale_factor * self.target_size[0]
+        scaled_target_width = scale_factor * self.target_size[1]
 
         # Recompute the accurate scale_factor using rounded scaled image size.
-        height = tf.shape(self._image)[0]
-        width = tf.shape(self._image)[1]
-        max_image_size = tf.to_float(tf.maximum(height, width))
-        image_scale = tf.to_float(scaled_size) / max_image_size
-
-        # Select non-zero random offset (x, y) if scaled image is larger than
-        # self._output_size.
-        scaled_height = tf.to_int32(tf.to_float(height) * image_scale)
-        scaled_width = tf.to_int32(tf.to_float(width) * image_scale)
-        offset_y = tf.to_float(scaled_height - self._output_size)
-        offset_x = tf.to_float(scaled_width - self._output_size)
-        offset_y = tf.maximum(0.0, offset_y) * tf.random_uniform([], 0, 1)
-        offset_x = tf.maximum(0.0, offset_x) * tf.random_uniform([], 0, 1)
-        offset_y = tf.to_int32(offset_y)
-        offset_x = tf.to_int32(offset_x)
-        self._image_scale = image_scale
-
-    def __call__(self, img, annotations: dict):
         width, height = img.size
-        if height > width:
-            scale = self.target_size / height
-            scaled_height = self.target_size
-            scaled_width = int(width * scale)
-        else:
-            scale = self.target_size / width
-            scaled_height = int(height * scale)
-            scaled_width = self.target_size
+        img_scale_y = scaled_target_height / height
+        img_scale_x = scaled_target_width / width
+        img_scale = min(img_scale_y, img_scale_x)
 
-        new_img = Image.new("RGB", (self.target_size, self.target_size))
+        # Select non-zero random offset (x, y) if scaled image is larger than target size
+        scaled_h = int(height * img_scale)
+        scaled_w = int(width * img_scale)
+        offset_y = scaled_h - self.target_size[0]
+        offset_x = scaled_w - self.target_size[1]
+        offset_y = int(max(0.0, float(offset_y)) * random.uniform(0, 1))
+        offset_x = int(max(0.0, float(offset_x)) * random.uniform(0, 1))
+        return scaled_h, scaled_w, offset_y, offset_x, img_scale
+
+    def __call__(self, img, anno: dict):
+        scaled_h, scaled_w, offset_y, offset_x, img_scale = self._get_params(img)
+
+        new_img = Image.new("RGB", (self.target_size[1], self.target_size[0]))
         interp_method = _pil_interp(self.interpolation)
-        img = img.resize((scaled_width, scaled_height), interp_method)
+        img = img.resize((scaled_w, scaled_h), interp_method)
+        img = img.crop((offset_x, offset_y, offset_x + self.target_size[1], offset_y + self.target_size[0]))
         new_img.paste(img)
 
-        if 'bbox' in annotations:
+        if 'bbox' in anno:
             # FIXME haven't tested this path since not currently using dataset annotations for train/eval
-            bbox = annotations['bbox']
-            bbox[:, :4] *= scale
-            bbox = clip_boxes(bbox, (scaled_height, scaled_width))
-            indices = np.where(np.sum(bbox, axis=1) != 0)[0]
-            if len(indices) < len(bbox):
-                bbox = np.take(bbox, indices)
-                annotations['cls'] = np.take(annotations['cls'], indices)
-            annotations['bbox'] = bbox
+            bbox = anno['bbox']
+            bbox[:, :4] *= img_scale
+            box_offset = np.stack([offset_y, offset_x] * 2)
+            bbox -= box_offset
+            anno['bbox'], anno['cls'] = clip_boxes_remove_empty(bbox, anno['cls'], (scaled_h, scaled_w))
 
-        annotations['scale'] = 1. / scale  # back to original
+        anno['scale'] = 1. / img_scale  # back to original
 
-        return new_img, annotations
+        return new_img, anno
 
 
 class RandomFlip:
@@ -200,6 +196,7 @@ class RandomFlip:
 
         return img, annotations
 
+
 class Compose:
 
     def __init__(self, transforms: list):
@@ -238,7 +235,7 @@ def transforms_coco_train(
 
     image_tfl = [
         RandomFlip(horizontal=True, prob=0.5),
-        ResizePad(target_size=img_size, interpolation=interpolation),
+        RandomResizePad(target_size=img_size, interpolation=interpolation),
         ImageToNumpy(),
     ]
 
