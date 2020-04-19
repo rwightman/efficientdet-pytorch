@@ -10,11 +10,11 @@ import torch.nn as nn
 import logging
 import math
 from collections import OrderedDict
-from typing import List, Optional
+from typing import List
 from timm import create_model
 from timm.models.layers import create_conv2d, drop_path, create_pool2d, Swish
-from .config import config
 
+from .config.config import get_fpn_config
 
 _DEBUG = False
 
@@ -240,48 +240,6 @@ class BiFpnLayer(nn.Module):
     def forward(self, x):
         x = self.fnode(x)
         return x[-self.num_levels::]
-
-
-def bifpn_sum_config(base_reduction=8):
-    """BiFPN config with sum."""
-    p = config.Config()
-    p.nodes = [
-        {'reduction': base_reduction << 3, 'inputs_offsets': [3, 4]},
-        {'reduction': base_reduction << 2, 'inputs_offsets': [2, 5]},
-        {'reduction': base_reduction << 1, 'inputs_offsets': [1, 6]},
-        {'reduction': base_reduction, 'inputs_offsets': [0, 7]},
-        {'reduction': base_reduction << 1, 'inputs_offsets': [1, 7, 8]},
-        {'reduction': base_reduction << 2, 'inputs_offsets': [2, 6, 9]},
-        {'reduction': base_reduction << 3, 'inputs_offsets': [3, 5, 10]},
-        {'reduction': base_reduction << 4, 'inputs_offsets': [4, 11]},
-    ]
-    p.weight_method = 'sum'
-    return p
-
-
-def bifpn_attn_config():
-    """BiFPN config with fast weighted sum."""
-    p = bifpn_sum_config()
-    p.weight_method = 'attn'
-    return p
-
-
-def bifpn_fa_config():
-    """BiFPN config with fast weighted sum."""
-    p = bifpn_sum_config()
-    p.weight_method = 'fastattn'
-    return p
-
-
-def get_fpn_config(fpn_name):
-    if not fpn_name:
-        fpn_name = 'bifpn_fa'
-    name_to_config = {
-        'bifpn_sum': bifpn_sum_config(),
-        'bifpn_attn': bifpn_attn_config(),
-        'bifpn_fa': bifpn_fa_config(),
-    }
-    return name_to_config[fpn_name]
 
 
 class BiFpn(nn.Module):
