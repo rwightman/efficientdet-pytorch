@@ -8,6 +8,7 @@ Hacked together by Ross Wightman
 import torch
 import torch.nn as nn
 import logging
+import math
 from collections import OrderedDict
 from typing import List, Optional
 from timm import create_model
@@ -334,8 +335,6 @@ class BiFpn(nn.Module):
             self.cell.add_module(str(rep), fpn_layer)
             feature_info = fpn_layer.feature_info
 
-        # FIXME init weights for training
-
     def forward(self, x):
         assert len(self.resample) == self.config.num_levels - len(x)
         x = self.resample(x)
@@ -377,8 +376,6 @@ class HeadNet(nn.Module):
         else:
             self.predict = ConvBnAct2d(**predict_kwargs)
 
-        # FIXME init weights for training
-
     def forward(self, x):
         outputs = []
         for level in range(self.config.num_levels):
@@ -395,18 +392,90 @@ class HeadNet(nn.Module):
         return outputs
 
 
+def _init_weight(m, n='', ):
+    """ Weight initialization as per Tensorflow official implementations.
+    """
+
+    def _fan_in_out(w, groups=1):
+        dimensions = w.dim()
+        if dimensions < 2:
+            raise ValueError("Fan in and fan out can not be computed for tensor with fewer than 2 dimensions")
+        num_input_fmaps = w.size(1)
+        num_output_fmaps = w.size(0)
+        receptive_field_size = 1
+        if w.dim() > 2:
+            receptive_field_size = w[0][0].numel()
+        fan_in = num_input_fmaps * receptive_field_size
+        fan_out = num_output_fmaps * receptive_field_size
+        fan_out //= groups
+        return fan_in, fan_out
+
+    def _glorot_uniform(w, gain=1, groups=1):
+        fan_in, fan_out = _fan_in_out(w, groups)
+        gain /= max(1., (fan_in + fan_out) / 2.)  # fan avg
+        limit = math.sqrt(3.0 * gain)
+        w.data.uniform_(-limit, limit)
+
+    def _variance_scaling(w, gain=1, groups=1):
+        fan_in, fan_out = _fan_in_out(w, groups)
+        gain /= max(1., fan_in)  # fan in
+        # gain /= max(1., (fan_in + fan_out) / 2.)  # fan
+
+        # should it be normal or trunc normal? using normal for now since no good trunc in PT
+        # constant taken from scipy.stats.truncnorm.std(a=-2, b=2, loc=0., scale=1.)
+        # std = math.sqrt(gain) / .87962566103423978
+        # w.data.trunc_normal(std=std)
+        std = math.sqrt(gain)
+        w.data.normal_(std=std)
+
+    if isinstance(m, SeparableConv2d):
+        if 'box_net' in n or 'class_net' in n:
+            _variance_scaling(m.conv_dw.weight, groups=m.conv_dw.groups)
+            _variance_scaling(m.conv_pw.weight)
+            if m.conv_pw.bias is not None:
+                if 'class_net.predict' in n:
+                    m.conv_pw.bias.data.fill_(-math.log((1 - 0.01) / 0.01))
+                else:
+                    m.conv_pw.bias.data.zero_()
+        else:
+            _glorot_uniform(m.conv_dw.weight, groups=m.conv_dw.groups)
+            _glorot_uniform(m.conv_pw.weight)
+        if m.conv_pw.bias is not None:
+            m.conv_pw.bias.data.zero_()
+    elif isinstance(m, ConvBnAct2d):
+        if 'box_net' in n or 'class_net' in n:
+            m.conv.weight.data.normal_(std=.01)
+            if m.conv.bias is not None:
+                if 'class_net.predict' in n:
+                    m.conv.bias.data.fill_(-math.log((1 - 0.01) / 0.01))
+                else:
+                    m.conv.bias.data.zero_()
+        else:
+            _glorot_uniform(m.conv.weight)
+            if m.conv.bias is not None:
+                m.conv.bias.data.zero_()
+    elif isinstance(m, nn.BatchNorm2d):
+        # looks like all bn init the same?
+        m.weight.data.fill_(1.0)
+        m.bias.data.zero_()
+
+
 class EfficientDet(nn.Module):
 
-    def __init__(self, config, norm_kwargs=None):
+    def __init__(self, config, norm_kwargs=None, pretrained_backbone=True):
         super(EfficientDet, self).__init__()
         norm_kwargs = norm_kwargs or dict(eps=.001)
         self.backbone = create_model(
-            config.backbone_name, features_only=True, out_indices=(2, 3, 4))
+            config.backbone_name, features_only=True, out_indices=(2, 3, 4), pretrained=pretrained_backbone)
         feature_info = [dict(num_chs=f['num_chs'], reduction=f['reduction'])
                         for i, f in enumerate(self.backbone.feature_info())]
         self.fpn = BiFpn(config, feature_info, norm_kwargs=norm_kwargs)
         self.class_net = HeadNet(config, num_outputs=config.num_classes, norm_kwargs=norm_kwargs)
         self.box_net = HeadNet(config, num_outputs=4, norm_kwargs=norm_kwargs)
+
+        for n, m in self.named_modules():
+            if 'backbone' not in n:
+                _init_weight(m, n)
 
     def forward(self, x):
         x = self.backbone(x)
