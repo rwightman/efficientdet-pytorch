@@ -35,7 +35,6 @@ from data import CocoDetection, create_loader
 from timm.data import FastCollateMixup, mixup_batch
 from timm.models import resume_checkpoint
 from timm.utils import *
-from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
 from timm.optim import create_optimizer
 from timm.scheduler import create_scheduler
 
@@ -85,19 +84,21 @@ parser.add_argument('--drop-path', type=float, default=None, metavar='PCT',
                     help='Drop path rate (default: None)')
 parser.add_argument('--drop-block', type=float, default=None, metavar='PCT',
                     help='Drop block rate (default: None)')
+parser.add_argument('--clip-grad', type=float, default=10.0, metavar='NORM',
+                    help='Clip gradient norm (default: 10.0)')
 
 # Optimizer parameters
-parser.add_argument('--opt', default='rmsproptf', type=str, metavar='OPTIMIZER',
-                    help='Optimizer (default: "rmsproptf"')
+parser.add_argument('--opt', default='sgd', type=str, metavar='OPTIMIZER',
+                    help='Optimizer (default: "sgd"')
 parser.add_argument('--opt-eps', default=1e-3, type=float, metavar='EPSILON',
                     help='Optimizer Epsilon (default: 1e-8)')
 parser.add_argument('--momentum', type=float, default=0.9, metavar='M',
                     help='SGD momentum (default: 0.9)')
-parser.add_argument('--weight-decay', type=float, default=0.00004,
+parser.add_argument('--weight-decay', type=float, default=4e-5,
                     help='weight decay (default: 0.00004)')
 
 # Learning rate schedule parameters
-parser.add_argument('--sched', default='step', type=str, metavar='SCHEDULER',
+parser.add_argument('--sched', default='cosine', type=str, metavar='SCHEDULER',
                     help='LR scheduler (default: "step"')
 parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
                     help='learning rate (default: 0.01)')
@@ -247,9 +248,11 @@ def main():
 
     # create model
     config = get_efficientdet_config(args.model)
+    config.redundant_bias = False
     model = EfficientDet(config)
     model = DetBenchTrain(model, config)
 
+    # FIXME create model factory, pretrained zoo
     # model = create_model(
     #     args.model,
     #     pretrained=args.pretrained,
@@ -395,17 +398,6 @@ def main():
         pin_mem=args.pin_mem,
     )
 
-    # if args.mixup > 0.:
-    #     # smoothing is handled with mixup label transform
-    #     train_loss_fn = SoftTargetCrossEntropy().cuda()
-    #     validate_loss_fn = nn.CrossEntropyLoss().cuda()
-    # elif args.smoothing:
-    #     train_loss_fn = LabelSmoothingCrossEntropy(smoothing=args.smoothing).cuda()
-    #     validate_loss_fn = nn.CrossEntropyLoss().cuda()
-    # else:
-    #     train_loss_fn = nn.CrossEntropyLoss().cuda()
-    #     validate_loss_fn = train_loss_fn
-
     eval_metric = args.eval_metric
     best_metric = None
     best_epoch = None
@@ -498,8 +490,12 @@ def train_epoch(
         if use_amp:
             with amp.scale_loss(loss, optimizer) as scaled_loss:
                 scaled_loss.backward()
+            if args.clip_grad:
+                torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.clip_grad)
         else:
             loss.backward()
+            if args.clip_grad:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip_grad)
         optimizer.step()
 
         torch.cuda.synchronize()

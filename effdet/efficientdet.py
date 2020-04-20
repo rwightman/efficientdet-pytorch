@@ -92,7 +92,8 @@ class SeparableConv2d(nn.Module):
 class ResampleFeatureMap(nn.Sequential):
 
     def __init__(self, in_channels, out_channels, reduction_ratio=1., pad_type='', pooling_type='max',
-                 norm_layer=nn.BatchNorm2d, norm_kwargs=None, conv_after_downsample=False, apply_bn=False):
+                 norm_layer=nn.BatchNorm2d, norm_kwargs=None, apply_bn=False, conv_after_downsample=False,
+                 redundant_bias=False):
         super(ResampleFeatureMap, self).__init__()
         pooling_type = pooling_type or 'max'
         self.in_channels = in_channels
@@ -104,7 +105,8 @@ class ResampleFeatureMap(nn.Sequential):
         if in_channels != out_channels:
             conv = ConvBnAct2d(
                 in_channels, out_channels, kernel_size=1, padding=pad_type,
-                norm_layer=norm_layer if apply_bn else None, norm_kwargs=norm_kwargs, bias=True, act_layer=None)
+                norm_layer=norm_layer if apply_bn else None, norm_kwargs=norm_kwargs,
+                bias=not apply_bn or redundant_bias, act_layer=None)
 
         if reduction_ratio > 1:
             stride_size = int(reduction_ratio)
@@ -142,8 +144,8 @@ class ResampleFeatureMap(nn.Sequential):
 
 class FpnCombine(nn.Module):
     def __init__(self, feature_info, fpn_config, fpn_channels, inputs_offsets, target_reduction, pad_type='',
-                 pooling_type='max', norm_layer=nn.BatchNorm2d, norm_kwargs=None,
-                 apply_bn_for_resampling=False, conv_after_downsample=False, weight_method='attn'):
+                 pooling_type='max', norm_layer=nn.BatchNorm2d, norm_kwargs=None, apply_bn_for_resampling=False,
+                 conv_after_downsample=False, redundant_bias=False, weight_method='attn'):
         super(FpnCombine, self).__init__()
         self.inputs_offsets = inputs_offsets
         self.weight_method = weight_method
@@ -161,7 +163,8 @@ class FpnCombine(nn.Module):
             self.resample[str(offset)] = ResampleFeatureMap(
                 in_channels, fpn_channels, reduction_ratio=reduction_ratio, pad_type=pad_type,
                 pooling_type=pooling_type, norm_layer=norm_layer, norm_kwargs=norm_kwargs,
-                apply_bn=apply_bn_for_resampling, conv_after_downsample=conv_after_downsample)
+                apply_bn=apply_bn_for_resampling, conv_after_downsample=conv_after_downsample,
+                redundant_bias=redundant_bias)
 
         if weight_method == 'attn' or weight_method == 'fastattn':
             # WSM
@@ -197,7 +200,7 @@ class BiFpnLayer(nn.Module):
     def __init__(self, feature_info, fpn_config, fpn_channels, num_levels=5, pad_type='',
                  pooling_type='max', norm_layer=nn.BatchNorm2d, norm_kwargs=None, act_layer=_ACT_LAYER,
                  apply_bn_for_resampling=False, conv_after_downsample=True, conv_bn_relu_pattern=False,
-                 separable_conv=True):
+                 separable_conv=True, redundant_bias=False):
         super(BiFpnLayer, self).__init__()
         self.fpn_config = fpn_config
         self.num_levels = num_levels
@@ -215,14 +218,14 @@ class BiFpnLayer(nn.Module):
                 feature_info, fpn_config, fpn_channels, fnode_cfg['inputs_offsets'], target_reduction=reduction,
                 pad_type=pad_type, pooling_type=pooling_type, norm_layer=norm_layer, norm_kwargs=norm_kwargs,
                 apply_bn_for_resampling=apply_bn_for_resampling, conv_after_downsample=conv_after_downsample,
-                weight_method=fpn_config.weight_method)
+                redundant_bias=redundant_bias, weight_method=fpn_config.weight_method)
             self.feature_info.append(dict(num_chs=fpn_channels, reduction=reduction))
 
             # after combine ops
             after_combine = OrderedDict()
             if not conv_bn_relu_pattern:
                 after_combine['act'] = act_layer(inplace=True)
-                conv_bias = True
+                conv_bias = redundant_bias
                 conv_act = None
             else:
                 conv_bias = False
@@ -267,6 +270,7 @@ class BiFpn(nn.Module):
                     reduction_ratio=reduction_ratio,
                     apply_bn=config.apply_bn_for_resampling,
                     conv_after_downsample=config.conv_after_downsample,
+                    redundant_bias=config.redundant_bias,
                 ))
                 in_chs = config.fpn_channels
                 reduction = int(reduction * reduction_ratio)
@@ -288,7 +292,8 @@ class BiFpn(nn.Module):
                 separable_conv=config.separable_conv,
                 apply_bn_for_resampling=config.apply_bn_for_resampling,
                 conv_after_downsample=config.conv_after_downsample,
-                conv_bn_relu_pattern=config.conv_bn_relu_pattern
+                conv_bn_relu_pattern=config.conv_bn_relu_pattern,
+                redundant_bias=config.redundant_bias,
             )
             self.cell.add_module(str(rep), fpn_layer)
             feature_info = fpn_layer.feature_info
@@ -301,8 +306,7 @@ class BiFpn(nn.Module):
 
 
 class HeadNet(nn.Module):
-    def __init__(self, config, num_outputs, norm_layer=nn.BatchNorm2d, norm_kwargs=None,
-                 act_layer=_ACT_LAYER, predict_bias_init=None):
+    def __init__(self, config, num_outputs, norm_layer=nn.BatchNorm2d, norm_kwargs=None, act_layer=_ACT_LAYER):
         super(HeadNet, self).__init__()
         norm_kwargs = norm_kwargs or {}
         self.config = config
@@ -312,7 +316,7 @@ class HeadNet(nn.Module):
         self.bn_rep = nn.ModuleList()
         conv_kwargs = dict(
             in_channels=config.fpn_channels, out_channels=config.fpn_channels, kernel_size=3,
-            padding=self.config.pad_type, bias=True, act_layer=None, norm_layer=None)
+            padding=self.config.pad_type, bias=config.redundant_bias, act_layer=None, norm_layer=None)
         for i in range(config.box_class_repeats):
             conv = SeparableConv2d(**conv_kwargs) if config.separable_conv else ConvBnAct2d(**conv_kwargs)
             self.conv_rep.append(conv)

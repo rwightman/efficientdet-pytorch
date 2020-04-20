@@ -45,6 +45,7 @@ def default_detection_configs():
     h.conv_bn_relu_pattern = False
     h.use_native_resize_op = False
     h.pooling_type = None
+    h.redundant_bias = True  # TF compatible models have back to back bias + BN layers
 
     # version.
     h.fpn_name = None
@@ -94,6 +95,7 @@ efficientdet_model_param_dict = {
             fpn_channels=64,
             fpn_cell_repeats=3,
             box_class_repeats=3,
+            redundant_bias=True,
         ),
     'tf_efficientdet_d1':
         dict(
@@ -103,6 +105,7 @@ efficientdet_model_param_dict = {
             fpn_channels=88,
             fpn_cell_repeats=4,
             box_class_repeats=3,
+            redundant_bias=True,
         ),
     'tf_efficientdet_d2':
         dict(
@@ -112,6 +115,7 @@ efficientdet_model_param_dict = {
             fpn_channels=112,
             fpn_cell_repeats=5,
             box_class_repeats=3,
+            redundant_bias=True,
         ),
     'tf_efficientdet_d3':
         dict(
@@ -121,6 +125,7 @@ efficientdet_model_param_dict = {
             fpn_channels=160,
             fpn_cell_repeats=6,
             box_class_repeats=4,
+            redundant_bias=True,
         ),
     'tf_efficientdet_d4':
         dict(
@@ -130,6 +135,7 @@ efficientdet_model_param_dict = {
             fpn_channels=224,
             fpn_cell_repeats=7,
             box_class_repeats=4,
+            redundant_bias=True,
         ),
     'tf_efficientdet_d5':
         dict(
@@ -139,6 +145,7 @@ efficientdet_model_param_dict = {
             fpn_channels=288,
             fpn_cell_repeats=7,
             box_class_repeats=4,
+            redundant_bias=True,
         ),
     'tf_efficientdet_d6':
         dict(
@@ -149,6 +156,7 @@ efficientdet_model_param_dict = {
             fpn_cell_repeats=8,
             box_class_repeats=5,
             fpn_name='bifpn_sum',  # Use unweighted sum for training stability.
+            redundant_bias=True,
         ),
     'tf_efficientdet_d7':
         dict(
@@ -160,6 +168,7 @@ efficientdet_model_param_dict = {
             box_class_repeats=5,
             anchor_scale=5.0,
             fpn_name='bifpn_sum',  # Use unweighted sum for training stability.
+            redundant_bias=True,
         ),
 }
 

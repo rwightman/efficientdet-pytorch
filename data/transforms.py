@@ -6,6 +6,7 @@ import torch
 from PIL import Image
 import numpy as np
 import random
+import math
 
 IMAGENET_DEFAULT_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_DEFAULT_STD = (0.229, 0.224, 0.225)
@@ -106,10 +107,12 @@ class ResizePad:
 
 class RandomResizePad:
 
-    def __init__(self, target_size: int, scale: tuple = (0.1, 2.0), interpolation: str = 'bilinear'):
+    def __init__(self, target_size: int, scale: tuple = (0.1, 2.0), interpolation: str = 'bilinear',
+                 fill_color: tuple = (0, 0, 0)):
         self.target_size = _size_tuple(target_size)
         self.scale = scale
         self.interpolation = interpolation
+        self.fill_color = fill_color
 
     def _get_params(self, img):
         # Select a random scale factor.
@@ -135,10 +138,11 @@ class RandomResizePad:
     def __call__(self, img, anno: dict):
         scaled_h, scaled_w, offset_y, offset_x, img_scale = self._get_params(img)
 
-        new_img = Image.new("RGB", (self.target_size[1], self.target_size[0]))
         interp_method = _pil_interp(self.interpolation)
         img = img.resize((scaled_w, scaled_h), interp_method)
-        img = img.crop((offset_x, offset_y, offset_x + self.target_size[1], offset_y + self.target_size[0]))
+        right, lower = min(scaled_w, offset_x + self.target_size[1]), min(scaled_h, offset_y + self.target_size[0])
+        img = img.crop((offset_x, offset_y, right, lower))
+        new_img = Image.new("RGB", (self.target_size[1], self.target_size[0]), color=self.fill_color)
         new_img.paste(img)
 
         if 'bbox' in anno:
@@ -235,7 +239,8 @@ def transforms_coco_train(
 
     image_tfl = [
         RandomFlip(horizontal=True, prob=0.5),
-        RandomResizePad(target_size=img_size, interpolation=interpolation),
+        RandomResizePad(
+            target_size=img_size, interpolation=interpolation, fill_color=tuple([int(round(255 * x)) for x in mean])),
         ImageToNumpy(),
     ]
 

@@ -12,3 +12,5 @@ numpy<=1.17.5
 
 # pycocotools needs this but doesn't have dep
 matplotlib
+
+omegaconf==2.0.0rc24
