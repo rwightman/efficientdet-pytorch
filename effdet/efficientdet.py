@@ -426,7 +426,7 @@ class EfficientDet(nn.Module):
 
     def __init__(self, config, norm_kwargs=None, pretrained_backbone=True):
         super(EfficientDet, self).__init__()
-        norm_kwargs = norm_kwargs or dict(eps=.001)
+        norm_kwargs = norm_kwargs or dict(eps=.001, momentum=.01)
         self.backbone = create_model(
             config.backbone_name, features_only=True, out_indices=(2, 3, 4), pretrained=pretrained_backbone)
         feature_info = [dict(num_chs=f['num_chs'], reduction=f['reduction'])
