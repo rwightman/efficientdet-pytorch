@@ -20,7 +20,7 @@ class ImageToNumpy:
         np_img = np.array(pil_img, dtype=np.uint8)
         if np_img.ndim < 3:
             np_img = np.expand_dims(np_img, axis=-1)
-        np_img = np.rollaxis(np_img, 2)  # HWC to CHW
+        np_img = np.moveaxis(np_img, 2, 0)  # HWC to CHW
         return np_img, annotations
 
 
@@ -33,7 +33,7 @@ class ImageToTensor:
         np_img = np.array(pil_img, dtype=np.uint8)
         if np_img.ndim < 3:
             np_img = np.expand_dims(np_img, axis=-1)
-        np_img = np.rollaxis(np_img, 2)  # HWC to CHW
+        np_img = np.moveaxis(np_img, 2, 0)  # HWC to CHW
         return torch.from_numpy(np_img).to(dtype=self.dtype), annotations
 
 
@@ -49,21 +49,16 @@ def _pil_interp(method):
         return Image.BILINEAR
 
 
-def clip_boxes(boxes, img_size):
+def clip_boxes_(boxes, img_size):
     height, width = img_size
-    boxes = np.where(boxes < 0, np.zeros_like(boxes), boxes)
-    boxes[:, 2] = np.where(boxes[:, 2] > height, (height - 1) * np.ones_like(boxes[:, 2]), boxes[:, 2])
-    boxes[:, 3] = np.where(boxes[:, 3] > width, (width - 1) * np.ones_like(boxes[:, 3]), boxes[:, 3])
-    return boxes
+    clip_upper = np.array([height - 1, width - 1] * 2, dtype=boxes.dtype)
+    np.clip(boxes, 0, clip_upper, out=boxes)
 
 
-def clip_boxes_remove_empty(boxes, classes, img_size):
-    boxes = clip_boxes(boxes, img_size)
-    indices = np.where(np.sum(boxes, axis=1) != 0)[0]
-    if len(indices) < len(boxes):
-        boxes = boxes[indices, :]
-        classes = classes[indices]
-    return boxes, classes
+def clip_boxes(boxes, img_size):
+    clipped_boxes = boxes.copy()
+    clip_boxes_(clipped_boxes, img_size)
+    return clipped_boxes
 
 
 def _size_tuple(size):
@@ -76,9 +71,10 @@ def _size_tuple(size):
 
 class ResizePad:
 
-    def __init__(self, target_size: int, interpolation: str = 'bilinear'):
+    def __init__(self, target_size: int, interpolation: str = 'bilinear', fill_color: tuple = (0, 0, 0)):
         self.target_size = _size_tuple(target_size)
         self.interpolation = interpolation
+        self.fill_color = fill_color
 
     def __call__(self, img, anno: dict):
         width, height = img.size
@@ -89,7 +85,7 @@ class ResizePad:
         scaled_h = int(height * img_scale)
         scaled_w = int(width * img_scale)
 
-        new_img = Image.new("RGB", (self.target_size[1], self.target_size[0]))
+        new_img = Image.new("RGB", (self.target_size[1], self.target_size[0]), color=self.fill_color)
         interp_method = _pil_interp(self.interpolation)
         img = img.resize((scaled_w, scaled_h), interp_method)
         new_img.paste(img)
@@ -98,7 +94,10 @@ class ResizePad:
             # FIXME haven't tested this path since not currently using dataset annotations for train/eval
             bbox = anno['bbox']
             bbox[:, :4] *= img_scale
-            anno['bbox'], anno['cls'] = clip_boxes_remove_empty(bbox, anno['cls'], (scaled_h, scaled_w))
+            clip_boxes_(bbox, (scaled_h, scaled_w))
+            valid_indices = (bbox[:, :2] < bbox[:, 2:4]).all(axis=1)
+            anno['bbox'] = bbox[valid_indices, :]
+            anno['cls'] = anno['cls'][valid_indices]
 
         anno['scale'] = 1. / img_scale  # back to original
 
@@ -146,12 +145,15 @@ class RandomResizePad:
         new_img.paste(img)
 
         if 'bbox' in anno:
-            # FIXME haven't tested this path since not currently using dataset annotations for train/eval
-            bbox = anno['bbox']
+            # FIXME not fully tested
+            bbox = anno['bbox'].copy()  # FIXME copy for debugger inspection, back to inplace
             bbox[:, :4] *= img_scale
             box_offset = np.stack([offset_y, offset_x] * 2)
             bbox -= box_offset
-            anno['bbox'], anno['cls'] = clip_boxes_remove_empty(bbox, anno['cls'], (scaled_h, scaled_w))
+            clip_boxes_(bbox, (scaled_h, scaled_w))
+            valid_indices = (bbox[:, :2] < bbox[:, 2:4]).all(axis=1)
+            anno['bbox'] = bbox[valid_indices, :]
+            anno['cls'] = anno['cls'][valid_indices]
 
         anno['scale'] = 1. / img_scale  # back to original
 
@@ -174,29 +176,31 @@ class RandomFlip:
         do_horizontal, do_vertical = self._get_params()
         width, height = img.size
 
+        def _fliph(bbox):
+            x_max = width - bbox[:, 1]
+            x_min = width - bbox[:, 3]
+            bbox[:, 1] = x_min
+            bbox[:, 3] = x_max
+
+        def _flipv(bbox):
+            y_max = height - bbox[:, 0]
+            y_min = height - bbox[:, 2]
+            bbox[:, 0] = y_min
+            bbox[:, 2] = y_max
+
         if do_horizontal and do_vertical:
             img = img.transpose(Image.ROTATE_180)
             if 'bbox' in annotations:
-                bbox = annotations['bbox']
-                bbox[:, 0] = height - bbox[:, 0]
-                bbox[:, 2] = height - bbox[:, 2]
-                bbox[:, 1] = width - bbox[:, 1]
-                bbox[:, 3] = width - bbox[:, 3]
-                annotations['bbox'] = bbox
+                _fliph(annotations['bbox'])
+                _flipv(annotations['bbox'])
         elif do_horizontal:
             img = img.transpose(Image.FLIP_LEFT_RIGHT)
             if 'bbox' in annotations:
-                bbox = annotations['bbox']
-                bbox[:, 1] = width - bbox[:, 1]
-                bbox[:, 3] = width - bbox[:, 3]
-                annotations['bbox'] = bbox
+                _fliph(annotations['bbox'])
         elif do_vertical:
             img = img.transpose(Image.FLIP_TOP_BOTTOM)
             if 'bbox' in annotations:
-                bbox = annotations['bbox']
-                bbox[:, 0] = height - bbox[:, 0]
-                bbox[:, 2] = height - bbox[:, 2]
-                annotations['bbox'] = bbox
+                _flipv(annotations['bbox'])
 
         return img, annotations
 
@@ -220,7 +224,8 @@ def transforms_coco_eval(
         std=IMAGENET_DEFAULT_STD):
 
     image_tfl = [
-        ResizePad(target_size=img_size, interpolation=interpolation),
+        ResizePad(
+            target_size=img_size, interpolation=interpolation, fill_color=tuple([int(round(255 * x)) for x in mean])),
         ImageToNumpy(),
     ]
 

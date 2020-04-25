@@ -68,7 +68,9 @@ class CocoDetection(data.Dataset):
             if ann.get('ignore', False):
                 continue
             x1, y1, w, h = ann['bbox']
-            if ann['area'] <= 0 or w < 1 or h < 1:
+            if self.include_masks and ann['area'] <= 0:
+                continue
+            if w < 1 or h < 1:
                 continue
 
             # To subtract 1 or not, TF doesn't appear to do this so will keep it out for now.
