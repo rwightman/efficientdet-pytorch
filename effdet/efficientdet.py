@@ -348,7 +348,7 @@ class HeadNet(nn.Module):
                 x_level = self.bn_rep[i][level](x_level)
                 x_level = self.act(x_level)
                 if i > 0 and self.config.drop_path_rate:
-                    x_level = drop_path(x_level, self.config.drop_path_rate, self.is_training)
+                    x_level = drop_path(x_level, self.config.drop_path_rate, self.training)
                     x_level = x_level + x_level_in
             outputs.append(self.predict(x_level))
         return outputs
