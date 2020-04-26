@@ -343,13 +343,13 @@ class HeadNet(nn.Module):
         for level in range(self.config.num_levels):
             x_level = x[level]
             for i in range(self.config.box_class_repeats):
-                x_level_in = x_level
+                x_level_ident = x_level
                 x_level = self.conv_rep[i](x_level)
                 x_level = self.bn_rep[i][level](x_level)
                 x_level = self.act(x_level)
-                if i > 0 and self.config.drop_path_rate:
-                    x_level = drop_path(x_level, self.config.drop_path_rate, self.training)
-                    x_level = x_level + x_level_in
+                if i > 0 and self.config.fpn_drop_path_rate:
+                    x_level = drop_path(x_level, self.config.fpn_drop_path_rate, self.training)
+                    x_level += x_level_ident
             outputs.append(self.predict(x_level))
         return outputs
 
@@ -428,7 +428,8 @@ class EfficientDet(nn.Module):
         super(EfficientDet, self).__init__()
         norm_kwargs = norm_kwargs or dict(eps=.001, momentum=.01)
         self.backbone = create_model(
-            config.backbone_name, features_only=True, out_indices=(2, 3, 4), pretrained=pretrained_backbone)
+            config.backbone_name, features_only=True, out_indices=(2, 3, 4),
+            pretrained=pretrained_backbone, **config.backbone_args)
         feature_info = [dict(num_chs=f['num_chs'], reduction=f['reduction'])
                         for i, f in enumerate(self.backbone.feature_info())]
         self.fpn = BiFpn(config, feature_info, norm_kwargs=norm_kwargs)

@@ -15,6 +15,9 @@ def default_detection_configs():
     # model name.
     h.name = 'tf_efficientdet_d1'
 
+    h.backbone_name = 'tf_efficientnet_b1'
+    h.backbone_args = None  # FIXME sort out kwargs vs config for backbone creation
+
     # input preprocessing parameters
     h.image_size = 640
     h.input_rand_hflip = True
@@ -50,11 +53,9 @@ def default_detection_configs():
     # version.
     h.fpn_name = None
     h.fpn_config = None
+    h.fpn_drop_path_rate = 0.  # No stochastic depth in default.
 
     # FIXME move config below this point to a different config, add hierarchy, or use args as I usually do?
-
-    # No stochastic depth in default.
-    h.drop_path_rate = 0.
 
     # optimization
     h.momentum = 0.9
@@ -80,8 +81,6 @@ def default_detection_configs():
     h.lr_decay_method = 'cosine'
     h.moving_average_decay = 0.9998
     h.ckpt_var_scope = None
-    h.backbone_name = 'tf_efficientnet_b1'
-    h.backbone_config = None
 
     return h
 
@@ -96,6 +95,7 @@ efficientdet_model_param_dict = {
             fpn_cell_repeats=3,
             box_class_repeats=3,
             redundant_bias=True,
+            backbone_args=dict(drop_rate=0.2, drop_path_rate=0.2),
         ),
     'tf_efficientdet_d1':
         dict(
@@ -106,6 +106,7 @@ efficientdet_model_param_dict = {
             fpn_cell_repeats=4,
             box_class_repeats=3,
             redundant_bias=True,
+            backbone_args=dict(drop_rate=0.2, drop_path_rate=0.2),
         ),
     'tf_efficientdet_d2':
         dict(
@@ -116,6 +117,7 @@ efficientdet_model_param_dict = {
             fpn_cell_repeats=5,
             box_class_repeats=3,
             redundant_bias=True,
+            backbone_args=dict(drop_rate=0.3, drop_path_rate=0.2),
         ),
     'tf_efficientdet_d3':
         dict(
@@ -126,6 +128,7 @@ efficientdet_model_param_dict = {
             fpn_cell_repeats=6,
             box_class_repeats=4,
             redundant_bias=True,
+            backbone_args=dict(drop_rate=0.3, drop_path_rate=0.2),
         ),
     'tf_efficientdet_d4':
         dict(
@@ -136,6 +139,7 @@ efficientdet_model_param_dict = {
             fpn_cell_repeats=7,
             box_class_repeats=4,
             redundant_bias=True,
+            backbone_args=dict(drop_rate=0.4, drop_path_rate=0.2),
         ),
     'tf_efficientdet_d5':
         dict(
@@ -146,6 +150,7 @@ efficientdet_model_param_dict = {
             fpn_cell_repeats=7,
             box_class_repeats=4,
             redundant_bias=True,
+            backbone_args=dict(drop_rate=0.4, drop_path_rate=0.2),
         ),
     'tf_efficientdet_d6':
         dict(
@@ -157,6 +162,7 @@ efficientdet_model_param_dict = {
             box_class_repeats=5,
             fpn_name='bifpn_sum',  # Use unweighted sum for training stability.
             redundant_bias=True,
+            backbone_args=dict(drop_rate=0.5, drop_path_rate=0.2),
         ),
     'tf_efficientdet_d7':
         dict(
@@ -169,6 +175,7 @@ efficientdet_model_param_dict = {
             anchor_scale=5.0,
             fpn_name='bifpn_sum',  # Use unweighted sum for training stability.
             redundant_bias=True,
+            backbone_args=dict(drop_rate=0.5, drop_path_rate=0.2),
         ),
 }
 
