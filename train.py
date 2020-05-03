@@ -33,7 +33,7 @@ from effdet import get_efficientdet_config, EfficientDet, DetBenchEval, DetBench
 from data import CocoDetection, create_loader
 
 from timm.data import FastCollateMixup, mixup_batch
-from timm.models import resume_checkpoint
+from timm.models import resume_checkpoint, load_checkpoint
 from timm.utils import *
 from timm.optim import create_optimizer
 from timm.scheduler import create_scheduler
@@ -182,8 +182,6 @@ parser.add_argument('--recovery-interval', type=int, default=0, metavar='N',
                     help='how many batches to wait before writing recovery checkpoint')
 parser.add_argument('-j', '--workers', type=int, default=4, metavar='N',
                     help='how many training processes to use (default: 1)')
-parser.add_argument('--num-gpu', type=int, default=1,
-                    help='Number of GPUS to use')
 parser.add_argument('--save-images', action='store_true', default=False,
                     help='save images of input bathes every log interval for debugging')
 parser.add_argument('--amp', action='store_true', default=False,
@@ -238,15 +236,10 @@ def main():
     args.distributed = False
     if 'WORLD_SIZE' in os.environ:
         args.distributed = int(os.environ['WORLD_SIZE']) > 1
-        if args.distributed and args.num_gpu > 1:
-            logging.warning('Using more than one GPU per process in distributed mode is not allowed. Setting num_gpu to 1.')
-            args.num_gpu = 1
-
     args.device = 'cuda:0'
     args.world_size = 1
     args.rank = 0  # global rank
     if args.distributed:
-        args.num_gpu = 1
         args.device = 'cuda:%d' % args.local_rank
         torch.cuda.set_device(args.local_rank)
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
@@ -258,7 +251,7 @@ def main():
         logging.info('Training in distributed mode with multiple processes, 1 GPU per process. Process %d, total %d.'
                      % (args.rank, args.world_size))
     else:
-        logging.info('Training with a single process on %d GPUs.' % args.num_gpu)
+        logging.info('Training with a single process on 1 GPU.')
 
     torch.manual_seed(args.seed + args.rank)
 
@@ -287,17 +280,8 @@ def main():
         logging.info('Model %s created, param count: %d' %
                      (args.model, sum([m.numel() for m in model.parameters()])))
 
-    if args.num_gpu > 1:
-        if args.amp:
-            logging.warning(
-                'AMP does not work well with nn.DataParallel, disabling. Use distributed mode for multi-GPU AMP.')
-            args.amp = False
-        model = nn.DataParallel(model, device_ids=list(range(args.num_gpu))).cuda()
-    else:
-        model.cuda()
-
+    model.cuda()
     optimizer = create_optimizer(args, model)
-
     use_amp = False
     if has_apex and args.amp:
         model, optimizer = amp.initialize(model, optimizer, opt_level='O1')
@@ -310,7 +294,7 @@ def main():
     resume_state = {}
     resume_epoch = None
     if args.resume:
-        resume_state, resume_epoch = resume_checkpoint(model, args.resume)
+        resume_state, resume_epoch = resume_checkpoint(_unwrap_bench(model), args.resume)
     if resume_state and not args.no_resume_opt:
         if 'optimizer' in resume_state:
             if args.local_rank == 0:
@@ -328,8 +312,10 @@ def main():
         model_ema = ModelEma(
             model,
             decay=args.model_ema_decay,
-            device='cpu' if args.model_ema_force_cpu else '',
-            resume=args.resume)
+            device='cpu' if args.model_ema_force_cpu else '')
+            #resume=args.resume)  # FIXME bit of a mess with bench
+        if args.resume:
+            load_checkpoint(_unwrap_bench(model_ema), args.resume, use_ema=True)
 
     if args.distributed:
         if args.sync_bn:
