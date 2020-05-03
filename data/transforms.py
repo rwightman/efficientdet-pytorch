@@ -205,6 +205,20 @@ class RandomFlip:
         return img, annotations
 
 
+def resolve_fill_color(fill_color, img_mean=IMAGENET_DEFAULT_MEAN):
+    if isinstance(fill_color, tuple):
+        assert len(fill_color) == 3
+        fill_color = fill_color
+    else:
+        try:
+            int_color = int(fill_color)
+            fill_color = (int_color,) * 3
+        except ValueError:
+            assert fill_color == 'mean'
+            fill_color = tuple([int(round(255 * x)) for x in img_mean])
+    return fill_color
+
+
 class Compose:
 
     def __init__(self, transforms: list):
@@ -220,12 +234,15 @@ def transforms_coco_eval(
         img_size=224,
         interpolation='bilinear',
         use_prefetcher=False,
+        fill_color='mean',
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD):
 
+    fill_color = resolve_fill_color(fill_color, mean)
+
     image_tfl = [
         ResizePad(
-            target_size=img_size, interpolation=interpolation, fill_color=tuple([int(round(255 * x)) for x in mean])),
+            target_size=img_size, interpolation=interpolation, fill_color=fill_color),
         ImageToNumpy(),
     ]
 
@@ -239,13 +256,16 @@ def transforms_coco_train(
         img_size=224,
         interpolation='random',
         use_prefetcher=False,
+        fill_color='mean',
         mean=IMAGENET_DEFAULT_MEAN,
         std=IMAGENET_DEFAULT_STD):
+
+    fill_color = resolve_fill_color(fill_color, mean)
 
     image_tfl = [
         RandomFlip(horizontal=True, prob=0.5),
         RandomResizePad(
-            target_size=img_size, interpolation=interpolation, fill_color=tuple([int(round(255 * x)) for x in mean])),
+            target_size=img_size, interpolation=interpolation, fill_color=fill_color),
         ImageToNumpy(),
     ]
 

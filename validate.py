@@ -36,6 +36,8 @@ parser.add_argument('--anno', default='val2017',
                     help='mscoco annotation set (one of val2017, train2017, test-dev2017)')
 parser.add_argument('--model', '-m', metavar='MODEL', default='tf_efficientdet_d1',
                     help='model architecture (default: tf_efficientdet_d1)')
+parser.add_argument('--no-redundant-bias', action='store_true', default=False,
+                    help='remove redundant bias layers if True, need False for official TF weights')
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
 parser.add_argument('-b', '--batch-size', default=32, type=int,
@@ -48,6 +50,8 @@ parser.add_argument('--std', type=float,  nargs='+', default=None, metavar='STD'
                     help='Override std deviation of of dataset')
 parser.add_argument('--interpolation', default='bilinear', type=str, metavar='NAME',
                     help='Image resize interpolation type (overrides model)')
+parser.add_argument('--fill-color', default='0', type=str, metavar='NAME',
+                    help='Image augmentation fill (background) color ("mean" or int)')
 parser.add_argument('--log-freq', default=10, type=int,
                     metavar='N', help='batch logging frequency (default: 10)')
 parser.add_argument('--checkpoint', default='', type=str, metavar='PATH',
@@ -70,9 +74,11 @@ def validate(args):
     # might as well try to validate something
     args.pretrained = args.pretrained or not args.checkpoint
     args.prefetcher = not args.no_prefetcher
+    args.redundant_bias = not args.no_redundant_bias
 
     # create model
     config = get_efficientdet_config(args.model)
+    config.redundant_bias = args.redundant_bias
     model = EfficientDet(config)
     if args.checkpoint:
         load_checkpoint(model, args.checkpoint)
@@ -105,6 +111,7 @@ def validate(args):
         batch_size=args.batch_size,
         use_prefetcher=args.prefetcher,
         interpolation=args.interpolation,
+        fill_color=args.fill_color,
         num_workers=args.workers,
         pin_mem=args.pin_mem)
 

@@ -58,6 +58,8 @@ parser.add_argument('data', metavar='DIR',
                     help='path to dataset')
 parser.add_argument('--model', default='tf_efficientdet_d1', type=str, metavar='MODEL',
                     help='Name of model to train (default: "countception"')
+parser.add_argument('--redundant-bias', action='store_true', default=False,
+                    help='include redundant bias layers if True, need True to match official TF weights')
 parser.add_argument('--pretrained', action='store_true', default=False,
                     help='Start with pretrained version of specified network (if avail)')
 parser.add_argument('--initial-checkpoint', default='', type=str, metavar='PATH',
@@ -72,6 +74,8 @@ parser.add_argument('--std', type=float, nargs='+', default=None, metavar='STD',
                     help='Override std deviation of of dataset')
 parser.add_argument('--interpolation', default='', type=str, metavar='NAME',
                     help='Image resize interpolation type (overrides model)')
+parser.add_argument('--fill-color', default='0', type=str, metavar='NAME',
+                    help='Image augmentation fill (background) color ("mean" or int)')
 parser.add_argument('-b', '--batch-size', type=int, default=32, metavar='N',
                     help='input batch size for training (default: 32)')
 parser.add_argument('-vb', '--validation-batch-size-multiplier', type=int, default=1, metavar='N',
@@ -214,6 +218,18 @@ def _parse_args():
     return args, args_text
 
 
+def _unwrap_bench(model):
+    # FIXME push into CheckpointSaver or come up with cleaner support bench <-> model relationship
+    if isinstance(model, ModelEma):  # unwrap ModelEma
+        return _unwrap_bench(model.ema)
+    elif hasattr(model, 'module'):  # unwrap DDP
+        return _unwrap_bench(model.module)
+    elif hasattr(model, 'model'):  # unwrap Bench -> model
+        return _unwrap_bench(model.model)
+    else:
+        return model
+
+
 def main():
     setup_default_logging()
     args, args_text = _parse_args()
@@ -248,7 +264,7 @@ def main():
 
     # create model
     config = get_efficientdet_config(args.model)
-    config.redundant_bias = False
+    config.redundant_bias = args.redundant_bias  # redundant conv + BN bias layers (True to match official models)
     model = EfficientDet(config)
     model = DetBenchTrain(model, config)
 
@@ -354,6 +370,7 @@ def main():
     train_image_dir = train_anno_set
     dataset_train = CocoDetection(os.path.join(args.data, train_image_dir), train_annotation_path)
 
+    # FIXME cutmix/mixup worth investigating?
     # collate_fn = None
     # if args.prefetcher and args.mixup > 0:
     #     collate_fn = FastCollateMixup(args.mixup, args.smoothing, args.num_classes)
@@ -364,7 +381,7 @@ def main():
         batch_size=args.batch_size,
         is_training=True,
         use_prefetcher=args.prefetcher,
-        #re_prob=args.reprob,
+        #re_prob=args.reprob,  # FIXME add back various augmentations
         #re_mode=args.remode,
         #re_count=args.recount,
         #re_split=args.resplit,
@@ -450,8 +467,8 @@ def main():
                 # save proper checkpoint with eval metric
                 save_metric = eval_metrics[eval_metric]
                 best_metric, best_epoch = saver.save_checkpoint(
-                    model, optimizer, args,
-                    epoch=epoch, model_ema=model_ema, metric=save_metric, use_amp=use_amp)
+                    _unwrap_bench(model), optimizer, args,
+                    epoch=epoch, model_ema=_unwrap_bench(model_ema), metric=save_metric, use_amp=use_amp)
 
     except KeyboardInterrupt:
         pass
@@ -540,7 +557,8 @@ def train_epoch(
         if saver is not None and args.recovery_interval and (
                 last_batch or (batch_idx + 1) % args.recovery_interval == 0):
             saver.save_recovery(
-                model, optimizer, args, epoch, model_ema=model_ema, use_amp=use_amp, batch_idx=batch_idx)
+                _unwrap_bench(model), optimizer, args, epoch, model_ema=_unwrap_bench(model_ema),
+                use_amp=use_amp, batch_idx=batch_idx)
 
         if lr_scheduler is not None:
             lr_scheduler.step_update(num_updates=num_updates, metric=losses_m.avg)
@@ -569,11 +587,7 @@ def validate(model, loader, args, log_suffix=''):
             loss = model(input, target['bbox'], target['cls'])
             loss, class_loss, box_loss = loss
 
-            # augmentation reduction
-            # reduce_factor = args.tta
-            # if reduce_factor > 1:
-            #     output = output.unfold(0, reduce_factor, reduce_factor).mean(dim=2)
-            #     target = target[0:target.size(0):reduce_factor]
+            # FIXME do mAP validation
 
             if args.distributed:
                 reduced_loss = reduce_tensor(loss.data, args.world_size)
