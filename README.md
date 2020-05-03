@@ -116,6 +116,8 @@ TODO: Need an inference script
 NOTE:
 * Training script currently defaults to a model that does NOT have redundant conv + BN bias layers like the official models, set correct flag when validating.
 * I've only trained with img mean (`--fill-color mean`) as the background for crop/scale/aspect fill, the official repo uses black pixel (0) (`--fill-color 0`). Both likely work fine.
+* The official training code uses EMA weight averaging by default, it's not clear there is a point in doing this with the cosine LR schedule, I find the non-EMA weights end up better than EMA in the last 10-20% of training epochs 
+* The default h-params is a very close to unstable (exploding loss), don't try using Nesterov momentum. Try to keep the batch size up, use sync-bn.
 
 ## Results
 
