@@ -10,7 +10,10 @@ I am aware there are other PyTorch implementations. Their approach didn't fit we
 
 ## Updates / Tasks
 
-### 2020-4-15 
+### 2020-05-02
+First decent MSCOCO training results (from scratch, w/ pretrained classification backbone weights as starting point). 32.4 mAP for D0. Working on improvements and D1 trials still running.
+
+### 2020-04-15
 Taking a pause on training, some high priority things came up. There are signs of life on the training branch, was working the basic augs before priority switch, loss fn appeared to be doing something sane with distributed training working, no proper eval yet, init not correct yet. I will get to it, with SOTA training config and good performance as the end goal (as with my EfficientNet work). 
 
 ### 2020-04-11
@@ -35,14 +38,15 @@ Initial code with working validation posted. Yes, it's a little slow, but I thin
 - [x] Some cleanup, testing
 - [x] Submit to test-dev server, all good
 - [ ] Add torch hub support and pretrained URL based weight download
-- [ ] ~~Change module dependencies from 'timm' to minimal 'geffnet' for backbone, bring some of the layers here~~ leaving as `timm` for now, as the training code will use many `timm` functions that I leverage to reproduce SOTA EfficientNet training in PyTorch
-- [ ] Remove redundant bias layers that exist in the official impl and weights
+- [x] Remove redundant bias layers that exist in the official impl and weights
 - [ ] Add visualization support
 - [x] Performance improvements, numpy TF detection code -> optimized PyTorch
 - [ ] Verify/fix Torchscript and ONNX export compatibility
+- [ ] Try PyTorch 1.5 w/ NHWC (channels last) order which matches TF impl
 
 ### Possible Future Tasks
-- [ ] Training (object detection) reimplementation w/ Rand/AutoAugment, etc
+- [x] Basic Training (object detection) reimplementation (still need proper per epoch validation)
+- [ ] Advanced Training w/ Rand/AutoAugment, etc
 - [ ] Training (semantic segmentation) experiments
 - [ ] Integration with Detectron2 / MMDetection codebases
 - [ ] Addition and cleanup of EfficientNet based U-Net and DeepLab segmentation models that I've used in past projects
@@ -104,6 +108,14 @@ Run test-dev2017: `python validation.py /localtion/of/mscoco/ --model tf_efficie
 ### Run Inference
 
 TODO: Need an inference script
+
+### Run Training
+
+`./distributed_train.sh 2 /mscoco --model tf_efficientdet_d0 -b 16 --amp  --lr .05 --warmup-epochs 5  --sync-bn --opt fusedmomentum --fill-color mean --model-ema`
+
+NOTE:
+* Training script currently defaults to a model that does NOT have redundant conv + BN bias layers like the official models, set correct flag when validating.
+* I've only trained with img mean (`--fill-color mean`) as the background for crop/scale/aspect fill, the official repo uses black pixel (0) (`--fill-color 0`). Both likely work fine.
 
 ## Results
 
