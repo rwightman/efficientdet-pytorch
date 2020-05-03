@@ -8,12 +8,13 @@ Hacked together by Ross Wightman
 import torch
 import torch.nn as nn
 import logging
+import math
 from collections import OrderedDict
-from typing import List, Optional
+from typing import List
 from timm import create_model
 from timm.models.layers import create_conv2d, drop_path, create_pool2d, Swish
-from .config import config
 
+from .config.config import get_fpn_config
 
 _DEBUG = False
 
@@ -91,7 +92,8 @@ class SeparableConv2d(nn.Module):
 class ResampleFeatureMap(nn.Sequential):
 
     def __init__(self, in_channels, out_channels, reduction_ratio=1., pad_type='', pooling_type='max',
-                 norm_layer=nn.BatchNorm2d, norm_kwargs=None, conv_after_downsample=False, apply_bn=False):
+                 norm_layer=nn.BatchNorm2d, norm_kwargs=None, apply_bn=False, conv_after_downsample=False,
+                 redundant_bias=False):
         super(ResampleFeatureMap, self).__init__()
         pooling_type = pooling_type or 'max'
         self.in_channels = in_channels
@@ -103,7 +105,8 @@ class ResampleFeatureMap(nn.Sequential):
         if in_channels != out_channels:
             conv = ConvBnAct2d(
                 in_channels, out_channels, kernel_size=1, padding=pad_type,
-                norm_layer=norm_layer if apply_bn else None, norm_kwargs=norm_kwargs, bias=True, act_layer=None)
+                norm_layer=norm_layer if apply_bn else None, norm_kwargs=norm_kwargs,
+                bias=not apply_bn or redundant_bias, act_layer=None)
 
         if reduction_ratio > 1:
             stride_size = int(reduction_ratio)
@@ -141,8 +144,8 @@ class ResampleFeatureMap(nn.Sequential):
 
 class FpnCombine(nn.Module):
     def __init__(self, feature_info, fpn_config, fpn_channels, inputs_offsets, target_reduction, pad_type='',
-                 pooling_type='max', norm_layer=nn.BatchNorm2d, norm_kwargs=None,
-                 apply_bn_for_resampling=False, conv_after_downsample=False, weight_method='attn'):
+                 pooling_type='max', norm_layer=nn.BatchNorm2d, norm_kwargs=None, apply_bn_for_resampling=False,
+                 conv_after_downsample=False, redundant_bias=False, weight_method='attn'):
         super(FpnCombine, self).__init__()
         self.inputs_offsets = inputs_offsets
         self.weight_method = weight_method
@@ -160,7 +163,8 @@ class FpnCombine(nn.Module):
             self.resample[str(offset)] = ResampleFeatureMap(
                 in_channels, fpn_channels, reduction_ratio=reduction_ratio, pad_type=pad_type,
                 pooling_type=pooling_type, norm_layer=norm_layer, norm_kwargs=norm_kwargs,
-                apply_bn=apply_bn_for_resampling, conv_after_downsample=conv_after_downsample)
+                apply_bn=apply_bn_for_resampling, conv_after_downsample=conv_after_downsample,
+                redundant_bias=redundant_bias)
 
         if weight_method == 'attn' or weight_method == 'fastattn':
             # WSM
@@ -196,7 +200,7 @@ class BiFpnLayer(nn.Module):
     def __init__(self, feature_info, fpn_config, fpn_channels, num_levels=5, pad_type='',
                  pooling_type='max', norm_layer=nn.BatchNorm2d, norm_kwargs=None, act_layer=_ACT_LAYER,
                  apply_bn_for_resampling=False, conv_after_downsample=True, conv_bn_relu_pattern=False,
-                 separable_conv=True):
+                 separable_conv=True, redundant_bias=False):
         super(BiFpnLayer, self).__init__()
         self.fpn_config = fpn_config
         self.num_levels = num_levels
@@ -214,14 +218,14 @@ class BiFpnLayer(nn.Module):
                 feature_info, fpn_config, fpn_channels, fnode_cfg['inputs_offsets'], target_reduction=reduction,
                 pad_type=pad_type, pooling_type=pooling_type, norm_layer=norm_layer, norm_kwargs=norm_kwargs,
                 apply_bn_for_resampling=apply_bn_for_resampling, conv_after_downsample=conv_after_downsample,
-                weight_method=fpn_config.weight_method)
+                redundant_bias=redundant_bias, weight_method=fpn_config.weight_method)
             self.feature_info.append(dict(num_chs=fpn_channels, reduction=reduction))
 
             # after combine ops
             after_combine = OrderedDict()
             if not conv_bn_relu_pattern:
                 after_combine['act'] = act_layer(inplace=True)
-                conv_bias = True
+                conv_bias = redundant_bias
                 conv_act = None
             else:
                 conv_bias = False
@@ -239,48 +243,6 @@ class BiFpnLayer(nn.Module):
     def forward(self, x):
         x = self.fnode(x)
         return x[-self.num_levels::]
-
-
-def bifpn_sum_config(base_reduction=8):
-    """BiFPN config with sum."""
-    p = config.Config()
-    p.nodes = [
-        {'reduction': base_reduction << 3, 'inputs_offsets': [3, 4]},
-        {'reduction': base_reduction << 2, 'inputs_offsets': [2, 5]},
-        {'reduction': base_reduction << 1, 'inputs_offsets': [1, 6]},
-        {'reduction': base_reduction, 'inputs_offsets': [0, 7]},
-        {'reduction': base_reduction << 1, 'inputs_offsets': [1, 7, 8]},
-        {'reduction': base_reduction << 2, 'inputs_offsets': [2, 6, 9]},
-        {'reduction': base_reduction << 3, 'inputs_offsets': [3, 5, 10]},
-        {'reduction': base_reduction << 4, 'inputs_offsets': [4, 11]},
-    ]
-    p.weight_method = 'sum'
-    return p
-
-
-def bifpn_attn_config():
-    """BiFPN config with fast weighted sum."""
-    p = bifpn_sum_config()
-    p.weight_method = 'attn'
-    return p
-
-
-def bifpn_fa_config():
-    """BiFPN config with fast weighted sum."""
-    p = bifpn_sum_config()
-    p.weight_method = 'fastattn'
-    return p
-
-
-def get_fpn_config(fpn_name):
-    if not fpn_name:
-        fpn_name = 'bifpn_fa'
-    name_to_config = {
-        'bifpn_sum': bifpn_sum_config(),
-        'bifpn_attn': bifpn_attn_config(),
-        'bifpn_fa': bifpn_fa_config(),
-    }
-    return name_to_config[fpn_name]
 
 
 class BiFpn(nn.Module):
@@ -308,6 +270,7 @@ class BiFpn(nn.Module):
                     reduction_ratio=reduction_ratio,
                     apply_bn=config.apply_bn_for_resampling,
                     conv_after_downsample=config.conv_after_downsample,
+                    redundant_bias=config.redundant_bias,
                 ))
                 in_chs = config.fpn_channels
                 reduction = int(reduction * reduction_ratio)
@@ -329,12 +292,11 @@ class BiFpn(nn.Module):
                 separable_conv=config.separable_conv,
                 apply_bn_for_resampling=config.apply_bn_for_resampling,
                 conv_after_downsample=config.conv_after_downsample,
-                conv_bn_relu_pattern=config.conv_bn_relu_pattern
+                conv_bn_relu_pattern=config.conv_bn_relu_pattern,
+                redundant_bias=config.redundant_bias,
             )
             self.cell.add_module(str(rep), fpn_layer)
             feature_info = fpn_layer.feature_info
-
-        # FIXME init weights for training
 
     def forward(self, x):
         assert len(self.resample) == self.config.num_levels - len(x)
@@ -344,8 +306,7 @@ class BiFpn(nn.Module):
 
 
 class HeadNet(nn.Module):
-    def __init__(self, config, num_outputs, norm_layer=nn.BatchNorm2d, norm_kwargs=None,
-                 act_layer=_ACT_LAYER, predict_bias_init=None):
+    def __init__(self, config, num_outputs, norm_layer=nn.BatchNorm2d, norm_kwargs=None, act_layer=_ACT_LAYER):
         super(HeadNet, self).__init__()
         norm_kwargs = norm_kwargs or {}
         self.config = config
@@ -355,7 +316,7 @@ class HeadNet(nn.Module):
         self.bn_rep = nn.ModuleList()
         conv_kwargs = dict(
             in_channels=config.fpn_channels, out_channels=config.fpn_channels, kernel_size=3,
-            padding=self.config.pad_type, bias=True, act_layer=None, norm_layer=None)
+            padding=self.config.pad_type, bias=config.redundant_bias, act_layer=None, norm_layer=None)
         for i in range(config.box_class_repeats):
             conv = SeparableConv2d(**conv_kwargs) if config.separable_conv else ConvBnAct2d(**conv_kwargs)
             self.conv_rep.append(conv)
@@ -377,36 +338,107 @@ class HeadNet(nn.Module):
         else:
             self.predict = ConvBnAct2d(**predict_kwargs)
 
-        # FIXME init weights for training
-
     def forward(self, x):
         outputs = []
         for level in range(self.config.num_levels):
             x_level = x[level]
             for i in range(self.config.box_class_repeats):
-                x_level_in = x_level
+                x_level_ident = x_level
                 x_level = self.conv_rep[i](x_level)
                 x_level = self.bn_rep[i][level](x_level)
                 x_level = self.act(x_level)
-                if i > 0 and self.config.drop_path_rate:
-                    x_level = drop_path(x_level, self.config.drop_path_rate, self.is_training)
-                    x_level = x_level + x_level_in
+                if i > 0 and self.config.fpn_drop_path_rate:
+                    x_level = drop_path(x_level, self.config.fpn_drop_path_rate, self.training)
+                    x_level += x_level_ident
             outputs.append(self.predict(x_level))
         return outputs
 
 
+def _init_weight(m, n='', ):
+    """ Weight initialization as per Tensorflow official implementations.
+    """
+
+    def _fan_in_out(w, groups=1):
+        dimensions = w.dim()
+        if dimensions < 2:
+            raise ValueError("Fan in and fan out can not be computed for tensor with fewer than 2 dimensions")
+        num_input_fmaps = w.size(1)
+        num_output_fmaps = w.size(0)
+        receptive_field_size = 1
+        if w.dim() > 2:
+            receptive_field_size = w[0][0].numel()
+        fan_in = num_input_fmaps * receptive_field_size
+        fan_out = num_output_fmaps * receptive_field_size
+        fan_out //= groups
+        return fan_in, fan_out
+
+    def _glorot_uniform(w, gain=1, groups=1):
+        fan_in, fan_out = _fan_in_out(w, groups)
+        gain /= max(1., (fan_in + fan_out) / 2.)  # fan avg
+        limit = math.sqrt(3.0 * gain)
+        w.data.uniform_(-limit, limit)
+
+    def _variance_scaling(w, gain=1, groups=1):
+        fan_in, fan_out = _fan_in_out(w, groups)
+        gain /= max(1., fan_in)  # fan in
+        # gain /= max(1., (fan_in + fan_out) / 2.)  # fan
+
+        # should it be normal or trunc normal? using normal for now since no good trunc in PT
+        # constant taken from scipy.stats.truncnorm.std(a=-2, b=2, loc=0., scale=1.)
+        # std = math.sqrt(gain) / .87962566103423978
+        # w.data.trunc_normal(std=std)
+        std = math.sqrt(gain)
+        w.data.normal_(std=std)
+
+    if isinstance(m, SeparableConv2d):
+        if 'box_net' in n or 'class_net' in n:
+            _variance_scaling(m.conv_dw.weight, groups=m.conv_dw.groups)
+            _variance_scaling(m.conv_pw.weight)
+            if m.conv_pw.bias is not None:
+                if 'class_net.predict' in n:
+                    m.conv_pw.bias.data.fill_(-math.log((1 - 0.01) / 0.01))
+                else:
+                    m.conv_pw.bias.data.zero_()
+        else:
+            _glorot_uniform(m.conv_dw.weight, groups=m.conv_dw.groups)
+            _glorot_uniform(m.conv_pw.weight)
+        if m.conv_pw.bias is not None:
+            m.conv_pw.bias.data.zero_()
+    elif isinstance(m, ConvBnAct2d):
+        if 'box_net' in n or 'class_net' in n:
+            m.conv.weight.data.normal_(std=.01)
+            if m.conv.bias is not None:
+                if 'class_net.predict' in n:
+                    m.conv.bias.data.fill_(-math.log((1 - 0.01) / 0.01))
+                else:
+                    m.conv.bias.data.zero_()
+        else:
+            _glorot_uniform(m.conv.weight)
+            if m.conv.bias is not None:
+                m.conv.bias.data.zero_()
+    elif isinstance(m, nn.BatchNorm2d):
+        # looks like all bn init the same?
+        m.weight.data.fill_(1.0)
+        m.bias.data.zero_()
+
+
 class EfficientDet(nn.Module):
 
-    def __init__(self, config, norm_kwargs=None):
+    def __init__(self, config, norm_kwargs=None, pretrained_backbone=True):
         super(EfficientDet, self).__init__()
-        norm_kwargs = norm_kwargs or dict(eps=.001)
+        norm_kwargs = norm_kwargs or dict(eps=.001, momentum=.01)
         self.backbone = create_model(
-            config.backbone_name, features_only=True, out_indices=(2, 3, 4))
+            config.backbone_name, features_only=True, out_indices=(2, 3, 4),
+            pretrained=pretrained_backbone, **config.backbone_args)
         feature_info = [dict(num_chs=f['num_chs'], reduction=f['reduction'])
                         for i, f in enumerate(self.backbone.feature_info())]
         self.fpn = BiFpn(config, feature_info, norm_kwargs=norm_kwargs)
         self.class_net = HeadNet(config, num_outputs=config.num_classes, norm_kwargs=norm_kwargs)
         self.box_net = HeadNet(config, num_outputs=4, norm_kwargs=norm_kwargs)
+
+        for n, m in self.named_modules():
+            if 'backbone' not in n:
+                _init_weight(m, n)
 
     def forward(self, x):
         x = self.backbone(x)

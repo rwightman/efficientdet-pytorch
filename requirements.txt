@@ -1,5 +1,5 @@
 torch>=1.4.0
-timm>=0.1.20
+timm>=0.1.22
 torchvision
 pycocotools
 pyyaml
@@ -12,3 +12,5 @@ numpy<=1.17.5
 
 # pycocotools needs this but doesn't have dep
 matplotlib
+
+omegaconf==2.0.0rc24

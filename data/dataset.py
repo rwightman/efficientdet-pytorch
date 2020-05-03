@@ -68,7 +68,9 @@ class CocoDetection(data.Dataset):
             if ann.get('ignore', False):
                 continue
             x1, y1, w, h = ann['bbox']
-            if ann['area'] <= 0 or w < 1 or h < 1:
+            if self.include_masks and ann['area'] <= 0:
+                continue
+            if w < 1 or h < 1:
                 continue
 
             # To subtract 1 or not, TF doesn't appear to do this so will keep it out for now.
@@ -99,10 +101,7 @@ class CocoDetection(data.Dataset):
             else:
                 bboxes_ignore = np.zeros((0, 4), dtype=np.float32)
 
-        ann = dict(
-            img_id=img_id,
-            bbox=bboxes,
-            cls=cls)
+        ann = dict(img_id=img_id, bbox=bboxes, cls=cls)
 
         if self.include_bboxes_ignore:
             ann['bbox_ignore'] = bboxes_ignore
