@@ -28,7 +28,7 @@ except ImportError:
     from torch.nn.parallel import DistributedDataParallel as DDP
     has_apex = False
 
-from effdet import get_efficientdet_config, EfficientDet, DetBenchEval, DetBenchTrain
+from effdet import get_efficientdet_config, EfficientDet, DetBenchEval, DetBenchTrain, COCOEvaluator
 
 from data import CocoDetection, create_loader
 
@@ -192,8 +192,8 @@ parser.add_argument('--no-prefetcher', action='store_true', default=False,
                     help='disable fast prefetcher')
 parser.add_argument('--output', default='', type=str, metavar='PATH',
                     help='path to output folder (default: none, current dir)')
-parser.add_argument('--eval-metric', default='loss', type=str, metavar='EVAL_METRIC',
-                    help='Best metric (default: "loss"')
+parser.add_argument('--eval-metric', default='map', type=str, metavar='EVAL_METRIC',
+                    help='Best metric (default: "map"')
 parser.add_argument('--tta', type=int, default=0, metavar='N',
                     help='Test/inference time augmentation (oversampling) factor. 0=None (default: 0)')
 parser.add_argument("--local_rank", default=0, type=int)
@@ -401,6 +401,8 @@ def main():
         pin_mem=args.pin_mem,
     )
 
+    evaluator = COCOEvaluator(dataset_eval.coco, distributed=args.distributed)
+
     eval_metric = args.eval_metric
     best_metric = None
     best_epoch = None
@@ -432,7 +434,7 @@ def main():
                     logging.info("Distributing BatchNorm running means and vars")
                 distribute_bn(model, args.world_size, args.dist_bn == 'reduce')
 
-            eval_metrics = validate(model, loader_eval, args)
+            eval_metrics = validate(model, loader_eval, args, evaluator)
 
             if model_ema is not None and not args.model_ema_force_cpu:
                 if args.distributed and args.dist_bn in ('broadcast', 'reduce'):
@@ -445,11 +447,11 @@ def main():
                 # step LR for next epoch
                 lr_scheduler.step(epoch + 1, eval_metrics[eval_metric])
 
-            update_summary(
-                epoch, train_metrics, eval_metrics, os.path.join(output_dir, 'summary.csv'),
-                write_header=best_metric is None)
-
             if saver is not None:
+                update_summary(
+                    epoch, train_metrics, eval_metrics, os.path.join(output_dir, 'summary.csv'),
+                    write_header=best_metric is None)
+
                 # save proper checkpoint with eval metric
                 save_metric = eval_metrics[eval_metric]
                 best_metric, best_epoch = saver.save_checkpoint(
@@ -483,8 +485,8 @@ def train_epoch(
         last_batch = batch_idx == last_idx
         data_time_m.update(time.time() - end)
 
-        loss = model(input, target['bbox'], target['cls'])
-        loss, class_loss, box_loss = loss
+        output = model(input, target)
+        loss = output['loss']
 
         if not args.distributed:
             losses_m.update(loss.item(), input.size(0))
@@ -558,7 +560,7 @@ def train_epoch(
     return OrderedDict([('loss', losses_m.avg)])
 
 
-def validate(model, loader, args, log_suffix=''):
+def validate(model, loader, args, evaluator=None, log_suffix=''):
     batch_time_m = AverageMeter()
     losses_m = AverageMeter()
 
@@ -570,10 +572,11 @@ def validate(model, loader, args, log_suffix=''):
         for batch_idx, (input, target) in enumerate(loader):
             last_batch = batch_idx == last_idx
 
-            loss = model(input, target['bbox'], target['cls'])
-            loss, class_loss, box_loss = loss
+            output = model(input, target)
+            loss = output['loss']
 
-            # FIXME do mAP validation
+            if evaluator is not None:
+                evaluator.add_predictions(output['detections'], target)
 
             if args.distributed:
                 reduced_loss = reduce_tensor(loss.data, args.world_size)
@@ -595,6 +598,8 @@ def validate(model, loader, args, log_suffix=''):
                         log_name, batch_idx, last_idx, batch_time=batch_time_m, loss=losses_m))
 
     metrics = OrderedDict([('loss', losses_m.avg)])
+    if evaluator is not None:
+        metrics['map'] = evaluator.evaluate()
 
     return metrics
 

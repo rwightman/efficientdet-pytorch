@@ -82,17 +82,30 @@ class DetBenchTrain(nn.Module):
         self.anchor_labeler = AnchorLabeler(anchors, config.num_classes, match_threshold=0.5)
         self.loss_fn = DetectionLoss(self.config)
 
-    def forward(self, x, gt_boxes, gt_labels):
+    def forward(self, x, target):
         class_out, box_out = self.model(x)
-
+        gt_boxes = target['bbox']
+        gt_classes = target['cls']
         cls_targets = []
         box_targets = []
         num_positives = []
         # FIXME this may be a bottleneck, would be faster if batched, or should be done in loader/dataset?
         for i in range(x.shape[0]):
-            gt_class_out, gt_box_out, num_positive = self.anchor_labeler.label_anchors(gt_boxes[i], gt_labels[i])
+            gt_class_out, gt_box_out, num_positive = self.anchor_labeler.label_anchors(gt_boxes[i], gt_classes[i])
             cls_targets.append(gt_class_out)
             box_targets.append(gt_box_out)
             num_positives.append(num_positive)
-
-        return self.loss_fn(class_out, box_out, cls_targets, box_targets, num_positives)
+        loss, class_loss, box_loss = self.loss_fn(class_out, box_out, cls_targets, box_targets, num_positives)
+        output = dict(loss=loss, class_loss=class_loss, box_loss=box_loss)
+        if not self.training:
+            # if eval mode, output detections for evaluation
+            class_out, box_out, indices, classes = _post_process(self.config, class_out, box_out)
+            batch_detections = []
+            # FIXME we may be able to do this as a batch with some tensor reshaping/indexing, PR welcome
+            for i in range(x.shape[0]):
+                detections = generate_detections(
+                    class_out[i], box_out[i], self.anchor_labeler.anchors.boxes,
+                    indices[i], classes[i], target['scale'][i])
+                batch_detections.append(detections)
+            output['detections'] = torch.stack(batch_detections, dim=0)
+        return output
