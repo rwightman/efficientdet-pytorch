@@ -1,3 +1,9 @@
+""" PyTorch distributed helpers
+
+Some of this lifted from Detectron2 with other fns added by myself. Some of the Detectron2 fns
+were intended for use with GLOO PG. I am using NCCL here with default PG so not everything will work
+as is -RW
+"""
 import functools
 import logging
 import numpy as np

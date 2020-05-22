@@ -32,12 +32,14 @@ Some other notes:
         and correspondingly, y,x (or ymin, xmin, ymax, xmax) ordering
     * Tensors are always provided as (flat) [N, 4] tensors.
 """
-
 import torch
+from typing import Optional, List, Dict
 
 
+@torch.jit.script
 class BoxList(object):
     """Box collection."""
+    data: Dict[str, torch.Tensor]
 
     def __init__(self, boxes):
         """Constructs box collection.
@@ -68,9 +70,14 @@ class BoxList(object):
 
     def get_extra_fields(self):
         """Returns all non-box fields (i.e., everything not named 'boxes')."""
-        return [k for k in self.data.keys() if k != 'boxes']
+        # return [k for k in self.data.keys() if k != 'boxes']  # FIXME torscript doesn't support comprehensions yet
+        extra: List[str] = []
+        for k in self.data.keys():
+            if k != 'boxes':
+                extra.append(k)
+        return extra
 
-    def add_field(self, field, field_data):
+    def add_field(self, field: str, field_data: torch.Tensor):
         """Add field to box list.
 
         This method can be used to add related box data such as weights/labels, etc.
@@ -81,10 +88,10 @@ class BoxList(object):
         """
         self.data[field] = field_data
 
-    def has_field(self, field):
+    def has_field(self, field: str):
         return field in self.data
 
-    @property
+    #@property  # FIXME for torchscript compat
     def boxes(self):
         """Convenience function for accessing box coordinates.
 
@@ -93,8 +100,8 @@ class BoxList(object):
         """
         return self.get_field('boxes')
 
-    @boxes.setter
-    def boxes(self, boxes):
+    #@boxes.setter  # FIXME for torchscript compat
+    def set_boxes(self, boxes):
         """Convenience function for setting box coordinates.
 
         Args:
@@ -107,7 +114,7 @@ class BoxList(object):
             raise ValueError('Invalid dimensions for box data.')
         self.data['boxes'] = boxes
 
-    def get_field(self, field):
+    def get_field(self, field: str):
         """Accesses a box collection and associated fields.
 
         This function returns specified field with object; if no field is specified,
@@ -126,7 +133,7 @@ class BoxList(object):
             raise ValueError('field ' + str(field) + ' does not exist')
         return self.data[field]
 
-    def set_field(self, field, value):
+    def set_field(self, field: str, value: torch.Tensor):
         """Sets the value of a field.
 
         Updates the field of a box_list with a given value.
@@ -148,8 +155,8 @@ class BoxList(object):
         Returns:
             a list of 4 1-D tensors [ycenter, xcenter, height, width].
         """
-        box_corners = self.boxes
-        ymin, xmin, ymax, xmax = box_corners.T.unbind()
+        box_corners = self.boxes()
+        ymin, xmin, ymax, xmax = box_corners.t().unbind()
         width = xmax - xmin
         height = ymax - ymin
         ycenter = ymin + height / 2.
@@ -160,10 +167,10 @@ class BoxList(object):
         """Transpose the coordinate representation in a boxlist.
 
         """
-        y_min, x_min, y_max, x_max = self.boxes.chunk(4, dim=1)
-        self.boxes = torch.cat([x_min, y_min, x_max, y_max], 1)
+        y_min, x_min, y_max, x_max = self.boxes().chunk(4, dim=1)
+        self.set_boxes(torch.cat([x_min, y_min, x_max, y_max], 1))
 
-    def as_tensor_dict(self, fields=None):
+    def as_tensor_dict(self, fields: Optional[List[str]] = None):
         """Retrieves specified fields as a dictionary of tensors.
 
         Args:
@@ -185,6 +192,6 @@ class BoxList(object):
             tensor_dict[field] = self.get_field(field)
         return tensor_dict
 
-    @property
+    #@property
     def device(self):
         return self.data['boxes'].device

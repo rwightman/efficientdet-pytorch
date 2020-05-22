@@ -28,7 +28,7 @@ except ImportError:
     from torch.nn.parallel import DistributedDataParallel as DDP
     has_apex = False
 
-from effdet import get_efficientdet_config, EfficientDet, DetBenchEval, DetBenchTrain, COCOEvaluator
+from effdet import get_efficientdet_config, EfficientDet, DetBenchPredict, DetBenchTrain, COCOEvaluator
 
 from data import CocoDetection, create_loader
 
