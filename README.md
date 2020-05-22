@@ -10,6 +10,13 @@ I am aware there are other PyTorch implementations. Their approach didn't fit we
 
 ## Updates / Tasks
 
+### 2020-05-22
+A bunch of changes:
+* COCO eval per epoch for better selection of checkpoints while training, works with distributed
+* optimizations to both train and inference that should see small throughput gains
+* doing the above, attempted to torchscript the full training loss + anchor labeler but ran into problems so had to back out part way due messy hacks or weird AMP issues causing silent bad results. Hopefully in PyTorch 1.6 there will be less TS issues.
+* updated results after clipping boxes, now pretty much exact match to official, even slightly better on a few models
+
 ### 2020-05-04
 Initial D1 training results in -- close but not quite there. Definitely in reach and better than any other non-official EfficientDet impl I've seen.
 
@@ -46,13 +53,6 @@ Previous D0 result:
  Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.532
  Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.668
 ```
-
-### 2020-05-22
-A bunch of changes:
-* COCO eval per epoch for better selection of checkpoints while training, works with distributed
-* optimizations to both train and inference that should see small throughput gains
-* doing the above, attempted to torchscript the full training loss + anchor labeler but ran into problems so had to back out part way due messy hacks or weird AMP issues causing silent bad results. Hopefully in PyTorch 1.6 there will be less TS issues.
-* updated results after clipping boxes, now pretty much exact match to official, even slightly better on a few models
 
 ### 2020-05-02
 First decent MSCOCO training results (from scratch, w/ pretrained classification backbone weights as starting point). 32.4 mAP for D0. Working on improvements and D1 trials still running.
