@@ -2,8 +2,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from typing import Optional, List
 
-def focal_loss(logits, targets, alpha, gamma, normalizer):
+
+def focal_loss(logits, targets, alpha: float, gamma: float, normalizer):
     """Compute the focal loss between `logits` and the golden `target` values.
 
     Focal loss = -(1-pt)^gamma * log(pt)
@@ -64,7 +66,8 @@ def focal_loss(logits, targets, alpha, gamma, normalizer):
     return weighted_loss
 
 
-def huber_loss(input, target, delta=1., weights=None, size_average=True):
+def huber_loss(
+        input, target, delta: float = 1., weights: Optional[torch.Tensor] = None, size_average: bool = True):
     """
     """
     err = input - target
@@ -77,7 +80,8 @@ def huber_loss(input, target, delta=1., weights=None, size_average=True):
     return loss.mean() if size_average else loss.sum()
 
 
-def smooth_l1_loss(input, target, beta=1. / 9, weights=None, size_average=True):
+def smooth_l1_loss(
+        input, target, beta: float = 1. / 9, weights: Optional[torch.Tensor] = None, size_average: bool = True):
     """
     very similar to the smooth_l1_loss from pytorch, but with the extra beta parameter
     """
@@ -96,14 +100,14 @@ def smooth_l1_loss(input, target, beta=1. / 9, weights=None, size_average=True):
     return loss.mean() if size_average else loss.sum()
 
 
-def _classification_loss(cls_outputs, cls_targets, num_positives, alpha=0.25, gamma=2.0):
+def _classification_loss(cls_outputs, cls_targets, num_positives, alpha: float = 0.25, gamma: float = 2.0):
     """Computes classification loss."""
     normalizer = num_positives
     classification_loss = focal_loss(cls_outputs, cls_targets, alpha, gamma, normalizer)
     return classification_loss
 
 
-def _box_loss(box_outputs, box_targets, num_positives, delta=0.1):
+def _box_loss(box_outputs, box_targets, num_positives, delta: float = 0.1):
     """Computes box regression loss."""
     # delta is typically around the mean value of regression target.
     # for instances, the regression targets of 512x512 input with 6 anchors on
@@ -125,15 +129,17 @@ class DetectionLoss(nn.Module):
         self.delta = config.delta
         self.box_loss_weight = config.box_loss_weight
 
-    def forward(self, cls_outputs, box_outputs, cls_targets, box_targets, num_positives):
+    def forward(
+            self, cls_outputs: List[torch.Tensor], box_outputs: List[torch.Tensor],
+            cls_targets: List[torch.Tensor], box_targets: List[torch.Tensor], num_positives: torch.Tensor):
         """Computes total detection loss.
         Computes total detection loss including box and class loss from all levels.
         Args:
-            cls_outputs: an OrderDict with keys representing levels and values
-                representing logits in [batch_size, height, width, num_anchors].
+            cls_outputs: a List with values representing logits in [batch_size, height, width, num_anchors].
+                at each feature level (index)
 
-            box_outputs: an OrderDict with keys representing levels and values
-                representing box regression targets in [batch_size, height, width, num_anchors * 4].
+            box_outputs: a List with values representing box regression targets in
+                [batch_size, height, width, num_anchors * 4] at each feature level (index)
 
             cls_targets: groundtruth class targets.
 
@@ -148,14 +154,6 @@ class DetectionLoss(nn.Module):
 
             box_loss: an integer tensor representing total box regression loss.
         """
-        if isinstance(num_positives, list):
-            # if num_positives is a list, all targets assumed to be batch size lists of tensors (or level->tensors)
-            stack_targets = True
-            num_positives = torch.stack(num_positives)
-        else:
-            # targets are already tensors
-            stack_targets = False
-
         # Sum all positives in a batch for normalization and avoid zero
         # num_positives_sum, which would lead to inf loss during training
         num_positives_sum = num_positives.sum() + 1.0
@@ -164,12 +162,8 @@ class DetectionLoss(nn.Module):
         cls_losses = []
         box_losses = []
         for l in range(levels):
-            if stack_targets:
-                cls_targets_at_level = torch.stack([b[l] for b in cls_targets])
-                box_targets_at_level = torch.stack([b[l] for b in box_targets])
-            else:
-                cls_targets_at_level = cls_targets[l]
-                box_targets_at_level = box_targets[l]
+            cls_targets_at_level = cls_targets[l]
+            box_targets_at_level = box_targets[l]
 
             # Onehot encoding for classification labels.
             # NOTE: PyTorch one-hot does not handle -ve entries (no hot) like Tensorflow, so mask them out

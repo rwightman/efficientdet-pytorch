@@ -51,7 +51,7 @@ def _pil_interp(method):
 
 def clip_boxes_(boxes, img_size):
     height, width = img_size
-    clip_upper = np.array([height - 1, width - 1] * 2, dtype=boxes.dtype)
+    clip_upper = np.array([height, width] * 2, dtype=boxes.dtype)
     np.clip(boxes, 0, clip_upper, out=boxes)
 
 
@@ -99,7 +99,7 @@ class ResizePad:
             anno['bbox'] = bbox[valid_indices, :]
             anno['cls'] = anno['cls'][valid_indices]
 
-        anno['scale'] = 1. / img_scale  # back to original
+        anno['img_scale'] = 1. / img_scale  # back to original
 
         return new_img, anno
 
@@ -155,7 +155,7 @@ class RandomResizePad:
             anno['bbox'] = bbox[valid_indices, :]
             anno['cls'] = anno['cls'][valid_indices]
 
-        anno['scale'] = 1. / img_scale  # back to original
+        anno['img_scale'] = 1. / img_scale  # back to original
 
         return new_img, anno
 

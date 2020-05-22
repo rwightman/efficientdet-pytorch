@@ -27,10 +27,12 @@ factory function for popular implementations.
 """
 import torch
 from torch.nn.functional import one_hot
-from . import matcher
+from .matcher import Match
+from typing import Optional
 
 
-class ArgMaxMatcher(matcher.Matcher):
+@torch.jit.script
+class ArgMaxMatcher(object):  # cannot inherit with torchscript
     """Matcher based on highest value.
 
     This class computes matches from a similarity matrix. Each column is matched
@@ -50,10 +52,10 @@ class ArgMaxMatcher(matcher.Matcher):
     """
 
     def __init__(self,
-                 matched_threshold,
-                 unmatched_threshold=None,
-                 negatives_lower_than_unmatched=True,
-                 force_match_for_each_row=False):
+                 matched_threshold: float,
+                 unmatched_threshold: Optional[float] = None,
+                 negatives_lower_than_unmatched: bool = True,
+                 force_match_for_each_row: bool = False):
         """Construct ArgMaxMatcher.
 
         Args:
@@ -80,6 +82,7 @@ class ArgMaxMatcher(matcher.Matcher):
         if (matched_threshold is None) and (unmatched_threshold is not None):
             raise ValueError('Need to also define matched_threshold when unmatched_threshold is defined')
         self._matched_threshold = matched_threshold
+        self._unmatched_threshold: float = 0.
         if unmatched_threshold is None:
             self._unmatched_threshold = matched_threshold
         else:
@@ -94,7 +97,52 @@ class ArgMaxMatcher(matcher.Matcher):
         self._force_match_for_each_row = force_match_for_each_row
         self._negatives_lower_than_unmatched = negatives_lower_than_unmatched
 
-    def _match(self, similarity_matrix):
+    def _match_when_rows_are_empty(self, similarity_matrix):
+        """Performs matching when the rows of similarity matrix are empty.
+
+        When the rows are empty, all detections are false positives. So we return
+        a tensor of -1's to indicate that the columns do not match to any rows.
+
+        Returns:
+            matches:  int32 tensor indicating the row each column matches to.
+        """
+        return -1 * torch.ones(similarity_matrix.shape[1], dtype=torch.long)
+
+    def _match_when_rows_are_non_empty(self, similarity_matrix):
+        """Performs matching when the rows of similarity matrix are non empty.
+
+        Returns:
+            matches:  int32 tensor indicating the row each column matches to.
+        """
+        # Matches for each column
+        matches = torch.argmax(similarity_matrix, 0)
+
+        # Deal with matched and unmatched threshold
+        if self._matched_threshold is not None:
+            # Get logical indices of ignored and unmatched columns as tf.int64
+            matched_vals = torch.max(similarity_matrix, 0)[0]
+            below_unmatched_threshold = self._unmatched_threshold > matched_vals
+            between_thresholds = (matched_vals >= self._unmatched_threshold) & \
+                                 (self._matched_threshold > matched_vals)
+
+            if self._negatives_lower_than_unmatched:
+                matches = self._set_values_using_indicator(matches, below_unmatched_threshold, -1)
+                matches = self._set_values_using_indicator(matches, between_thresholds, -2)
+            else:
+                matches = self._set_values_using_indicator(matches, below_unmatched_threshold, -2)
+                matches = self._set_values_using_indicator(matches, between_thresholds, -1)
+
+        if self._force_match_for_each_row:
+            force_match_column_ids = torch.argmax(similarity_matrix, 1)
+            force_match_column_indicators = one_hot(force_match_column_ids, similarity_matrix.shape[1])
+            force_match_row_ids = torch.argmax(force_match_column_indicators, 0)
+            force_match_column_mask = torch.max(force_match_column_indicators, 0)[0] != 0
+            final_matches = torch.where(force_match_column_mask, force_match_row_ids, matches)
+            return final_matches
+        else:
+            return matches
+
+    def match(self, similarity_matrix):
         """Tries to match each column of the similarity matrix to a row.
 
         Args:
@@ -103,58 +151,12 @@ class ArgMaxMatcher(matcher.Matcher):
         Returns:
             Match object with corresponding matches for each of M columns.
         """
-
-        def _match_when_rows_are_empty():
-            """Performs matching when the rows of similarity matrix are empty.
-
-            When the rows are empty, all detections are false positives. So we return
-            a tensor of -1's to indicate that the columns do not match to any rows.
-
-            Returns:
-                matches:  int32 tensor indicating the row each column matches to.
-            """
-            return -1 * torch.ones(similarity_matrix.shape[1], dtype=torch.long)
-
-        def _match_when_rows_are_non_empty():
-            """Performs matching when the rows of similarity matrix are non empty.
-
-            Returns:
-                matches:  int32 tensor indicating the row each column matches to.
-            """
-            # Matches for each column
-            matches = torch.argmax(similarity_matrix, 0)
-
-            # Deal with matched and unmatched threshold
-            if self._matched_threshold is not None:
-                # Get logical indices of ignored and unmatched columns as tf.int64
-                matched_vals = torch.max(similarity_matrix, 0)[0]
-                below_unmatched_threshold = self._unmatched_threshold > matched_vals
-                between_thresholds = (matched_vals >= self._unmatched_threshold) & \
-                                     (self._matched_threshold > matched_vals)
-
-                if self._negatives_lower_than_unmatched:
-                    matches = self._set_values_using_indicator(matches, below_unmatched_threshold, -1)
-                    matches = self._set_values_using_indicator(matches, between_thresholds, -2)
-                else:
-                    matches = self._set_values_using_indicator(matches, below_unmatched_threshold, -2)
-                    matches = self._set_values_using_indicator(matches, between_thresholds, -1)
-
-            if self._force_match_for_each_row:
-                force_match_column_ids = torch.argmax(similarity_matrix, 1)
-                force_match_column_indicators = one_hot(force_match_column_ids, similarity_matrix.shape[1])
-                force_match_row_ids = torch.argmax(force_match_column_indicators, 0)
-                force_match_column_mask = torch.max(force_match_column_indicators, 0)[0].bool()
-                final_matches = torch.where(force_match_column_mask, force_match_row_ids, matches)
-                return final_matches
-            else:
-                return matches
-
         if similarity_matrix.shape[0] == 0:
-            return _match_when_rows_are_empty()
+            return Match(self._match_when_rows_are_empty(similarity_matrix))
         else:
-            return _match_when_rows_are_non_empty()
+            return Match(self._match_when_rows_are_non_empty(similarity_matrix))
 
-    def _set_values_using_indicator(self, x, indicator, val):
+    def _set_values_using_indicator(self, x, indicator, val: int):
         """Set the indicated fields of x to val.
 
         Args:
@@ -165,5 +167,5 @@ class ArgMaxMatcher(matcher.Matcher):
         Returns:
             modified tensor.
         """
-        indicator = indicator.type(x.dtype)
+        indicator = indicator.to(dtype=x.dtype)
         return x * (1 - indicator) + val * indicator

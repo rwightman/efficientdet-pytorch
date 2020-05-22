@@ -16,10 +16,7 @@ try:
 except ImportError:
     has_amp = False
 
-
-from collections import OrderedDict
-
-from effdet import EfficientDet, get_efficientdet_config, DetBenchEval, load_checkpoint
+from effdet import EfficientDet, get_efficientdet_config, DetBenchPredict, load_checkpoint
 from data import create_loader, CocoDetection
 from utils import AverageMeter
 
@@ -40,8 +37,8 @@ parser.add_argument('--no-redundant-bias', action='store_true', default=False,
                     help='remove redundant bias layers if True, need False for official TF weights')
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
-parser.add_argument('-b', '--batch-size', default=32, type=int,
-                    metavar='N', help='mini-batch size (default: 256)')
+parser.add_argument('-b', '--batch-size', default=128, type=int,
+                    metavar='N', help='mini-batch size (default: 128)')
 parser.add_argument('--img-size', default=None, type=int,
                     metavar='N', help='Input image dimension, uses model default if empty')
 parser.add_argument('--mean', type=float, nargs='+', default=None, metavar='MEAN',
@@ -50,7 +47,7 @@ parser.add_argument('--std', type=float,  nargs='+', default=None, metavar='STD'
                     help='Override std deviation of of dataset')
 parser.add_argument('--interpolation', default='bilinear', type=str, metavar='NAME',
                     help='Image resize interpolation type (overrides model)')
-parser.add_argument('--fill-color', default='0', type=str, metavar='NAME',
+parser.add_argument('--fill-color', default='mean', type=str, metavar='NAME',
                     help='Image augmentation fill (background) color ("mean" or int)')
 parser.add_argument('--log-freq', default=10, type=int,
                     metavar='N', help='batch logging frequency (default: 10)')
@@ -86,7 +83,7 @@ def validate(args):
     param_count = sum([m.numel() for m in model.parameters()])
     print('Model %s created, param count: %d' % (args.model, param_count))
 
-    bench = DetBenchEval(model, config)
+    bench = DetBenchPredict(model, config)
     bench = bench.cuda()
     if has_amp:
         print('Using AMP mixed precision.')
@@ -122,7 +119,7 @@ def validate(args):
     end = time.time()
     with torch.no_grad():
         for i, (input, target) in enumerate(loader):
-            output = bench(input, target['scale'])
+            output = bench(input, target['img_scale'], target['img_size'])
             output = output.cpu()
             sample_ids = target['img_id'].cpu()
             for index, sample in enumerate(output):

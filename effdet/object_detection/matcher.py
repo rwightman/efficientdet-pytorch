@@ -30,12 +30,10 @@ consider this box a positive example (match) nor a negative example (no match).
 The Match class is used to store the match results and it provides simple apis
 to query the results.
 """
-from abc import ABCMeta
-from abc import abstractmethod
-
 import torch
 
 
+@torch.jit.script
 class Match(object):
     """Class to store results from the matcher.
 
@@ -43,7 +41,7 @@ class Match(object):
     convenient methods to query the matching results.
     """
 
-    def __init__(self, match_results):
+    def __init__(self, match_results: torch.Tensor):
         """Constructs a Match object.
 
         Args:
@@ -59,16 +57,7 @@ class Match(object):
             raise ValueError('match_results should have rank 1')
         if match_results.dtype not in (torch.int32, torch.int64):
             raise ValueError('match_results should be an int32 or int64 scalar tensor')
-        self._match_results = match_results
-
-    @property
-    def match_results(self):
-        """The accessor for match results.
-
-        Returns:
-            the tensor which encodes the match results.
-        """
-        return self._match_results
+        self.match_results = match_results
 
     def matched_column_indices(self):
         """Returns column indices that match to some row.
@@ -78,7 +67,7 @@ class Match(object):
         Returns:
             column_indices: int32 tensor of shape [K] with column indices.
         """
-        return self._reshape_and_cast(torch.where(self._match_results > -1))
+        return torch.nonzero(self.match_results > -1).flatten().long()
 
     def matched_column_indicator(self):
         """Returns column indices that are matched.
@@ -86,11 +75,11 @@ class Match(object):
         Returns:
             column_indices: int32 tensor of shape [K] with column indices.
         """
-        return self._match_results >= 0
+        return self.match_results >= 0
 
     def num_matched_columns(self):
         """Returns number (int32 scalar tensor) of matched columns."""
-        return self.matched_column_indices()
+        return self.matched_column_indices().numel()
 
     def unmatched_column_indices(self):
         """Returns column indices that do not match any row.
@@ -100,7 +89,7 @@ class Match(object):
         Returns:
           column_indices: int32 tensor of shape [K] with column indices.
         """
-        return self._reshape_and_cast(torch.where(self._match_results == -1))
+        return torch.nonzero(self.match_results == -1).flatten().long()
 
     def unmatched_column_indicator(self):
         """Returns column indices that are unmatched.
@@ -108,7 +97,7 @@ class Match(object):
         Returns:
           column_indices: int32 tensor of shape [K] with column indices.
         """
-        return self._match_results == -1
+        return self.match_results == -1
 
     def num_unmatched_columns(self):
         """Returns number (int32 scalar tensor) of unmatched columns."""
@@ -122,7 +111,7 @@ class Match(object):
         Returns:
           column_indices: int32 tensor of shape [K] with column indices.
         """
-        return self._reshape_and_cast(torch.where(self.ignored_column_indicator()))
+        return torch.nonzero(self.ignored_column_indicator()).flatten().long()
 
     def ignored_column_indicator(self):
         """Returns boolean column indicator where True means the column is ignored.
@@ -130,7 +119,7 @@ class Match(object):
         Returns:
             column_indicator: boolean vector which is True for all ignored column indices.
         """
-        return self._match_results == -2
+        return self.match_results == -2
 
     def num_ignored_columns(self):
         """Returns number (int32 scalar tensor) of matched columns."""
@@ -144,7 +133,7 @@ class Match(object):
         Returns:
             column_indices: int32 tensor of shape [K] with column indices.
         """
-        return self._reshape_and_cast(torch.where(0 > self._match_results))
+        return torch.nonzero(0 > self.match_results).flatten().long()
 
     def matched_row_indices(self):
         """Returns row indices that match some column.
@@ -157,10 +146,7 @@ class Match(object):
         Returns:
             row_indices: int32 tensor of shape [K] with row indices.
         """
-        return self._reshape_and_cast(torch.gather(self._match_results, 0, self.matched_column_indices()))
-
-    def _reshape_and_cast(self, t):
-        return torch.reshape(t, [-1]).long()
+        return torch.gather(self.match_results, 0, self.matched_column_indices()).flatten().long()
 
     def gather_based_on_match(self, input_tensor, unmatched_value, ignored_value):
         """Gathers elements from `input_tensor` based on match results.
@@ -186,45 +172,3 @@ class Match(object):
         gather_indices = torch.clamp(self.match_results + 2, min=0)
         gathered_tensor = torch.index_select(input_tensor, 0, gather_indices)
         return gathered_tensor
-
-
-class Matcher(object):
-    """Abstract base class for matcher.
-    """
-    __metaclass__ = ABCMeta
-
-    def match(self, similarity_matrix, **params):
-        """Computes matches among row and column indices and returns the result.
-
-        Computes matches among the row and column indices based on the similarity
-        matrix and optional arguments.
-
-        Args:
-            similarity_matrix: Float tensor of shape [N, M] with pairwise similarity
-                where higher value means more similar.
-            scope: Op scope name. Defaults to 'Match' if None.
-            **params: Additional keyword arguments for specific implementations of
-                the Matcher.
-
-        Returns:
-            A Match object with the results of matching.
-        """
-        return Match(self._match(similarity_matrix, **params))
-
-    @abstractmethod
-    def _match(self, similarity_matrix, **params):
-        """Method to be overridden by implementations.
-
-        Args:
-            similarity_matrix: Float tensor of shape [N, M] with pairwise similarity
-                where higher value means more similar.
-            **params: Additional keyword arguments for specific implementations of the Matcher.
-
-        Returns:
-            match_results: Integer tensor of shape [M]: match_results[i]>=0 means
-                that column i is matched to row match_results[i], match_results[i]=-1
-                means that the column is not matched. match_results[i]=-2 means that
-                the column is ignored (usually this happens when there is a very weak
-                match which one neither wants as positive nor negative example).
-        """
-        pass

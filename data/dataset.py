@@ -101,7 +101,7 @@ class CocoDetection(data.Dataset):
             else:
                 bboxes_ignore = np.zeros((0, 4), dtype=np.float32)
 
-        ann = dict(img_id=img_id, bbox=bboxes, cls=cls)
+        ann = dict(img_id=img_id, bbox=bboxes, cls=cls, img_size=(img_info['width'], img_info['height']))
 
         if self.include_bboxes_ignore:
             ann['bbox_ignore'] = bboxes_ignore
@@ -117,7 +117,10 @@ class CocoDetection(data.Dataset):
         """
         img_id = self.img_ids[index]
         img_info = self.img_infos[index]
-        ann = self._parse_img_ann(img_id, img_info) if self.has_annotations else dict(img_id=img_id)
+        if self.has_annotations:
+            ann = self._parse_img_ann(img_id, img_info)
+        else:
+            ann = dict(img_id=img_id, img_size=(img_info['width'], img_info['height']))
 
         path = img_info['file_name']
         img = Image.open(os.path.join(self.root, path)).convert('RGB')

@@ -17,13 +17,11 @@
 Region Similarity Calculators compare a pairwise measure of similarity
 between the boxes in two BoxLists.
 """
-from abc import ABCMeta
-from abc import abstractmethod
-
 import torch
+from .box_list import BoxList
 
 
-def area(boxlist):
+def area(boxlist: BoxList):
     """Computes area of boxes.
 
     Args:
@@ -32,12 +30,12 @@ def area(boxlist):
     Returns:
         a tensor with shape [N] representing box areas.
     """
-    y_min, x_min, y_max, x_max = boxlist.boxes.chunk(4, dim=1)
+    y_min, x_min, y_max, x_max = boxlist.boxes().chunk(4, dim=1)
     out = (y_max - y_min).squeeze(1) * (x_max - x_min).squeeze(1)
     return out
 
 
-def intersection(boxlist1, boxlist2):
+def intersection(boxlist1: BoxList, boxlist2: BoxList):
     """Compute pairwise intersection areas between boxes.
 
     Args:
@@ -47,18 +45,18 @@ def intersection(boxlist1, boxlist2):
     Returns:
         a tensor with shape [N, M] representing pairwise intersections
     """
-    y_min1, x_min1, y_max1, x_max1 = boxlist1.boxes.chunk(4, dim=1)
-    y_min2, x_min2, y_max2, x_max2 = boxlist2.boxes.chunk(4, dim=1)
-    all_pairs_min_ymax = torch.min(y_max1, y_max2.T)
-    all_pairs_max_ymin = torch.max(y_min1, y_min2.T)
+    y_min1, x_min1, y_max1, x_max1 = boxlist1.boxes().chunk(4, dim=1)
+    y_min2, x_min2, y_max2, x_max2 = boxlist2.boxes().chunk(4, dim=1)
+    all_pairs_min_ymax = torch.min(y_max1, y_max2.t())
+    all_pairs_max_ymin = torch.max(y_min1, y_min2.t())
     intersect_heights = torch.clamp(all_pairs_min_ymax - all_pairs_max_ymin, min=0)
-    all_pairs_min_xmax = torch.min(x_max1, x_max2.T)
-    all_pairs_max_xmin = torch.max(x_min1, x_min2.T)
+    all_pairs_min_xmax = torch.min(x_max1, x_max2.t())
+    all_pairs_max_xmin = torch.max(x_min1, x_min2.t())
     intersect_widths = torch.clamp(all_pairs_min_xmax - all_pairs_max_xmin, min=0)
     return intersect_heights * intersect_widths
 
 
-def iou(boxlist1, boxlist2):
+def iou(boxlist1: BoxList, boxlist2: BoxList):
     """Computes pairwise intersection-over-union between box collections.
 
     Args:
@@ -75,11 +73,16 @@ def iou(boxlist1, boxlist2):
     return torch.where(intersections == 0.0, torch.zeros_like(intersections), intersections / unions)
 
 
-class RegionSimilarityCalculator(object):
-    """Abstract base class for region similarity calculator."""
-    __metaclass__ = ABCMeta
+@torch.jit.script
+class IouSimilarity(object):
+    """Class to compute similarity based on Intersection over Union (IOU) metric.
 
-    def compare(self, boxlist1, boxlist2):
+    This class computes pairwise similarity between two BoxLists based on IOU.
+    """
+    def __init__(self):
+        pass
+
+    def compare(self, boxlist1: BoxList, boxlist2: BoxList):
         """Computes matrix of pairwise similarity between BoxLists.
 
         This op (to be overridden) computes a measure of pairwise similarity between
@@ -94,28 +97,5 @@ class RegionSimilarityCalculator(object):
 
         Returns:
             a (float32) tensor of shape [N, M] with pairwise similarity score.
-        """
-        return self._compare(boxlist1, boxlist2)
-
-    @abstractmethod
-    def _compare(self, boxlist1, boxlist2):
-        pass
-
-
-class IouSimilarity(RegionSimilarityCalculator):
-    """Class to compute similarity based on Intersection over Union (IOU) metric.
-
-    This class computes pairwise similarity between two BoxLists based on IOU.
-    """
-
-    def _compare(self, boxlist1, boxlist2):
-        """Compute pairwise IOU similarity between the two BoxLists.
-
-        Args:
-          boxlist1: BoxList holding N boxes.
-          boxlist2: BoxList holding M boxes.
-
-        Returns:
-          A tensor with shape [N, M] representing pairwise iou scores.
         """
         return iou(boxlist1, boxlist2)

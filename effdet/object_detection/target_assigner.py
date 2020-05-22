@@ -33,14 +33,22 @@ images must be handled externally.
 import torch
 
 from . import box_list
+from .region_similarity_calculator import IouSimilarity
+from .argmax_matcher import ArgMaxMatcher
+from .matcher import Match
+from .box_list import BoxList
+from .box_coder import FasterRcnnBoxCoder
 
 KEYPOINTS_FIELD_NAME = 'keypoints'
 
 
+#@torch.jit.script
 class TargetAssigner(object):
     """Target assigner to compute classification and regression targets."""
 
-    def __init__(self, similarity_calc, matcher, box_coder, negative_class_weight=1.0, unmatched_cls_target=None):
+    def __init__(self, similarity_calc: IouSimilarity, matcher: ArgMaxMatcher, box_coder: FasterRcnnBoxCoder,
+                 negative_class_weight: float = 1.0, unmatched_cls_target=None,
+                 keypoints_field_name: str = KEYPOINTS_FIELD_NAME):
         """Construct Object Detection Target Assigner.
 
         Args:
@@ -69,12 +77,9 @@ class TargetAssigner(object):
         self._box_coder = box_coder
         self._negative_class_weight = negative_class_weight
         self._unmatched_cls_target = unmatched_cls_target
+        self._keypoints_field_name = keypoints_field_name
 
-    @property
-    def box_coder(self):
-        return self._box_coder
-
-    def assign(self, anchors, groundtruth_boxes, groundtruth_labels=None, groundtruth_weights=None, **params):
+    def assign(self, anchors: BoxList, groundtruth_boxes: BoxList, groundtruth_labels=None, groundtruth_weights=None):
         """Assign classification and regression targets to each anchor.
 
         For a given set of anchors and groundtruth detections, match anchors
@@ -124,7 +129,7 @@ class TargetAssigner(object):
         if not isinstance(groundtruth_boxes, box_list.BoxList):
             raise ValueError('groundtruth_boxes must be an BoxList')
 
-        device = anchors.device
+        device = anchors.device()
 
         if groundtruth_labels is None:
             groundtruth_labels = torch.ones(groundtruth_boxes.num_boxes(), device=device).unsqueeze(0)
@@ -137,7 +142,7 @@ class TargetAssigner(object):
             groundtruth_weights = torch.ones([num_gt_boxes], device=device)
 
         match_quality_matrix = self._similarity_calc.compare(groundtruth_boxes, anchors)
-        match = self._matcher.match(match_quality_matrix, **params)
+        match = self._matcher.match(match_quality_matrix)
         reg_targets = self._create_regression_targets(anchors, groundtruth_boxes, match)
         cls_targets = self._create_classification_targets(groundtruth_labels, match)
         reg_weights = self._create_regression_weights(match, groundtruth_weights)
@@ -145,7 +150,7 @@ class TargetAssigner(object):
 
         return cls_targets, cls_weights, reg_targets, reg_weights, match
 
-    def _create_regression_targets(self, anchors, groundtruth_boxes, match):
+    def _create_regression_targets(self, anchors: BoxList, groundtruth_boxes: BoxList, match: Match):
         """Returns a regression target for each anchor.
 
         Args:
@@ -158,17 +163,17 @@ class TargetAssigner(object):
         Returns:
             reg_targets: a float32 tensor with shape [N, box_code_dimension]
         """
-        device = anchors.device
+        device = anchors.device()
         zero_box = torch.zeros(4, device=device)
         matched_gt_boxes = match.gather_based_on_match(
-            groundtruth_boxes.boxes, unmatched_value=zero_box, ignored_value=zero_box)
+            groundtruth_boxes.boxes(), unmatched_value=zero_box, ignored_value=zero_box)
         matched_gt_boxlist = box_list.BoxList(matched_gt_boxes)
-        if groundtruth_boxes.has_field(KEYPOINTS_FIELD_NAME):
-            groundtruth_keypoints = groundtruth_boxes.get_field(KEYPOINTS_FIELD_NAME)
+        if groundtruth_boxes.has_field(self._keypoints_field_name):
+            groundtruth_keypoints = groundtruth_boxes.get_field(self._keypoints_field_name)
             zero_kp = torch.zeros(groundtruth_keypoints.shape[1:], device=device)
             matched_keypoints = match.gather_based_on_match(
                 groundtruth_keypoints, unmatched_value=zero_kp, ignored_value=zero_kp)
-            matched_gt_boxlist.add_field(KEYPOINTS_FIELD_NAME, matched_keypoints)
+            matched_gt_boxlist.add_field(self._keypoints_field_name, matched_keypoints)
         matched_reg_targets = self._box_coder.encode(matched_gt_boxlist, anchors)
 
         unmatched_ignored_reg_targets = self._default_regression_target(device).repeat(match.match_results.shape[0], 1)
@@ -177,7 +182,7 @@ class TargetAssigner(object):
         reg_targets = torch.where(matched_anchors_mask.unsqueeze(1), matched_reg_targets, unmatched_ignored_reg_targets)
         return reg_targets
 
-    def _default_regression_target(self, device):
+    def _default_regression_target(self, device: torch.device):
         """Returns the default target for anchors to regress to.
 
         Default regression targets are set to zero (though in this implementation what
@@ -187,9 +192,9 @@ class TargetAssigner(object):
         Returns:
             default_target: a float32 tensor with shape [1, box_code_dimension]
         """
-        return torch.zeros(1, self._box_coder.code_size, device=device)
+        return torch.zeros(1, self._box_coder.code_size(), device=device)
 
-    def _create_classification_targets(self, groundtruth_labels, match):
+    def _create_classification_targets(self, groundtruth_labels, match: Match):
         """Create classification targets for each anchor.
 
         Assign a classification target of for each anchor to the matching
@@ -214,7 +219,7 @@ class TargetAssigner(object):
             uct = torch.scalar_tensor(0, device=groundtruth_labels.device)
         return match.gather_based_on_match(groundtruth_labels, unmatched_value=uct, ignored_value=uct)
 
-    def _create_regression_weights(self, match, groundtruth_weights):
+    def _create_regression_weights(self, match: Match, groundtruth_weights):
         """Set regression weight for each anchor.
 
         Only positive anchors are set to contribute to the regression loss, so this
@@ -232,7 +237,7 @@ class TargetAssigner(object):
         zs = torch.scalar_tensor(0, device=groundtruth_weights.device)
         return match.gather_based_on_match(groundtruth_weights, ignored_value=zs, unmatched_value=zs)
 
-    def _create_classification_weights(self, match, groundtruth_weights):
+    def _create_classification_weights(self, match: Match, groundtruth_weights):
         """Create classification weights for each anchor.
 
         Positive (matched) anchors are associated with a weight of
@@ -254,7 +259,7 @@ class TargetAssigner(object):
         ncw = torch.scalar_tensor(self._negative_class_weight, device=groundtruth_weights.device)
         return match.gather_based_on_match(groundtruth_weights, ignored_value=ignored, unmatched_value=ncw)
 
-    def get_box_coder(self):
+    def box_coder(self):
         """Get BoxCoder of this TargetAssigner.
 
         Returns:
