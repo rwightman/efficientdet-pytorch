@@ -402,8 +402,8 @@ def _init_weight(m, n='', ):
         else:
             _glorot_uniform(m.conv_dw.weight, groups=m.conv_dw.groups)
             _glorot_uniform(m.conv_pw.weight)
-        if m.conv_pw.bias is not None:
-            m.conv_pw.bias.data.zero_()
+            if m.conv_pw.bias is not None:
+                m.conv_pw.bias.data.zero_()
     elif isinstance(m, ConvBnAct2d):
         if 'box_net' in n or 'class_net' in n:
             m.conv.weight.data.normal_(std=.01)
@@ -422,9 +422,27 @@ def _init_weight(m, n='', ):
         m.bias.data.zero_()
 
 
+def _init_weight_alt(m, n='', ):
+    """ Weight initialization alternative, based on EfficientNet bacbkone init w/ class bias addition
+    NOTE: this will likely be removed after some experimentation
+    """
+    if isinstance(m, nn.Conv2d):
+        fan_out = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+        fan_out //= m.groups
+        m.weight.data.normal_(0, math.sqrt(2.0 / fan_out))
+        if m.bias is not None:
+            if 'class_net.predict' in n:
+                m.bias.data.fill_(-math.log((1 - 0.01) / 0.01))
+            else:
+                m.bias.data.zero_()
+    elif isinstance(m, nn.BatchNorm2d):
+        m.weight.data.fill_(1.0)
+        m.bias.data.zero_()
+
+
 class EfficientDet(nn.Module):
 
-    def __init__(self, config, norm_kwargs=None, pretrained_backbone=True):
+    def __init__(self, config, norm_kwargs=None, pretrained_backbone=True, alternate_init=False):
         super(EfficientDet, self).__init__()
         norm_kwargs = norm_kwargs or dict(eps=.001, momentum=.01)
         self.backbone = create_model(
@@ -438,7 +456,10 @@ class EfficientDet(nn.Module):
 
         for n, m in self.named_modules():
             if 'backbone' not in n:
-                _init_weight(m, n)
+                if alternate_init:
+                    _init_weight_alt(m, n)
+                else:
+                    _init_weight(m, n)
 
     def forward(self, x):
         x = self.backbone(x)
