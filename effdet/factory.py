@@ -1,6 +1,6 @@
 from .efficientdet import EfficientDet
 from .bench import DetBenchTrain, DetBenchPredict
-from .config.config import get_efficientdet_config
+from .config import get_efficientdet_config
 from .helpers import load_pretrained, load_checkpoint
 
 

@@ -11,10 +11,10 @@ import logging
 import math
 from collections import OrderedDict
 from typing import List
+
 from timm import create_model
 from timm.models.layers import create_conv2d, drop_path, create_pool2d, Swish
-
-from .config.config import get_fpn_config
+from .config import get_fpn_config
 
 _DEBUG = False
 

@@ -28,7 +28,7 @@ import collections
 import numpy as np
 import torch
 import torch.nn as nn
-from torchvision.ops.boxes import batched_nms, clip_boxes_to_image, remove_small_boxes
+from torchvision.ops.boxes import batched_nms, remove_small_boxes
 
 from effdet.object_detection import ArgMaxMatcher, FasterRcnnBoxCoder, BoxList, IouSimilarity, TargetAssigner
 

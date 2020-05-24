@@ -1,10 +1,5 @@
 #!/usr/bin/env python
-""" ImageNet Training Script
-
-This is intended to be a lean and easily modifiable ImageNet training script that reproduces ImageNet
-training results with some of the latest networks and training techniques. It favours canonical PyTorch
-and standard Python style over trying to be able to 'do it all.' That said, it offers quite a few speed
-and training result improvements over the usual PyTorch example scripts. Repurpose as you see fit.
+""" EfficientDet Training Script
 
 This script was started from an early version of the PyTorch ImageNet example
 (https://github.com/pytorch/examples/tree/master/imagenet)
@@ -19,8 +14,8 @@ import time
 import yaml
 from datetime import datetime
 
-from effdet.bench import unwrap_bench
-
+import torch
+import torchvision.utils
 try:
     from apex import amp
     from apex.parallel import DistributedDataParallel as DDP
@@ -30,16 +25,13 @@ except ImportError:
     from torch.nn.parallel import DistributedDataParallel as DDP
     has_apex = False
 
-from effdet import create_model, COCOEvaluator
+from effdet import create_model, COCOEvaluator, unwrap_bench
 from data import create_loader, CocoDetection
 
 from timm.models import resume_checkpoint, load_checkpoint
 from timm.utils import *
 from timm.optim import create_optimizer
 from timm.scheduler import create_scheduler
-
-import torch
-import torchvision.utils
 
 torch.backends.cudnn.benchmark = True
 

@@ -10,12 +10,14 @@ I am aware there are other PyTorch implementations. Their approach didn't fit we
 
 ## Updates / Tasks
 
-### 2020-05-22
+### 2020-05-22 / 23
 A bunch of changes:
 * COCO eval per epoch for better selection of checkpoints while training, works with distributed
 * optimizations to both train and inference that should see small throughput gains
 * doing the above, attempted to torchscript the full training loss + anchor labeler but ran into problems so had to back out part way due messy hacks or weird AMP issues causing silent bad results. Hopefully in PyTorch 1.6 there will be less TS issues.
 * updated results after clipping boxes, now pretty much exact match to official, even slightly better on a few models
+* added model factory, pretrained download, cleanup model configs
+* setup.py, pypi release
 
 ### 2020-05-04
 Initial D1 training results in -- close but not quite there. Definitely in reach and better than any other non-official EfficientDet impl I've seen.

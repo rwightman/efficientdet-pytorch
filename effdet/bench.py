@@ -4,7 +4,6 @@ Hacked together by Ross Wightman
 """
 import torch
 import torch.nn as nn
-
 from timm.utils import ModelEma
 from .anchors import Anchors, AnchorLabeler, generate_detections, MAX_DETECTION_POINTS
 from .loss import DetectionLoss
