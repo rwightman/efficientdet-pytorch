@@ -62,7 +62,7 @@ def default_detection_model_configs():
 
 
 efficientdet_model_param_dict = dict(
-    # Models with PyTorch friendly padding and PyTorch pretrained backbones.
+    # Models with PyTorch friendly padding and PyTorch pretrained backbones, training TBD
     efficientdet_d0=dict(
         name='efficientdet_d0',
         backbone_name='efficientnet_b0',
@@ -109,6 +109,34 @@ efficientdet_model_param_dict = dict(
         pad_type='',
         redundant_bias=False,
         backbone_args=dict(drop_rate=0.3, drop_path_rate=0.2),
+        url='',  # no pretrained weights yet
+    ),
+
+    # Experimental configs with alternate models, training TBD
+    # Note: any 'timm' model in the EfficientDet family can be used as a backone here.
+    # TODO: add support in config for activation via string/factory so we can use ReLU/ReLU6 for EffNet-Lite & Mnv2
+    mixdet_m=dict(
+        name='mixdet_m',
+        backbone_name='mixnet_m',
+        image_size=512,
+        fpn_channels=64,
+        fpn_cell_repeats=3,
+        box_class_repeats=3,
+        pad_type='',
+        redundant_bias=False,
+        backbone_args=dict(drop_rate=0.2, drop_path_rate=0.2),
+        url='',  # no pretrained weights yet
+    ),
+    mixdet_l=dict(
+        name='mixdet_l',
+        backbone_name='mixnet_l',
+        image_size=640,
+        fpn_channels=88,
+        fpn_cell_repeats=4,
+        box_class_repeats=3,
+        pad_type='',
+        redundant_bias=False,
+        backbone_args=dict(drop_rate=0.2, drop_path_rate=0.2),
         url='',  # no pretrained weights yet
     ),
 
