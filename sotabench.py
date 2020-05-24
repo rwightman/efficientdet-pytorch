@@ -7,15 +7,18 @@ try:
 except ImportError:
     has_amp = False
 from sotabencheval.object_detection import COCOEvaluator
-from sotabencheval.utils import is_server
+from sotabencheval.utils import is_server, extract_archive
 from effdet import create_model
 from data import CocoDetection, create_loader
 
 NUM_GPU = 1
 BATCH_SIZE = (128 if has_amp else 64) * NUM_GPU
+ANNO_SET = 'val2017'
 
 if is_server():
     DATA_ROOT = './.data/vision/coco'
+    #image_dir_zip = os.path.join('./.data/vision/coco', f'{ANNO_SET}.zip')
+    #extract_archive(from_path=image_dir_zip, to_path='./.data/vision/coco')
 else: # local settings
     DATA_ROOT = ''
 
@@ -82,10 +85,14 @@ def eval_model(model_name, paper_model_name, paper_arxiv_id, batch_size=64, mode
     else:
         print('AMP not installed, running network in FP32.')
 
-    anno_set = 'val2017'
-    annotation_path = os.path.join(DATA_ROOT, 'annotations', f'instances_{anno_set}.json')
-    image_dir = anno_set
-    dataset = CocoDetection(os.path.join(DATA_ROOT, image_dir), annotation_path)
+    annotation_path = os.path.join(DATA_ROOT, 'annotations', f'instances_{ANNO_SET}.json')
+    evaluator = COCOEvaluator(
+        root=DATA_ROOT,
+        model_name=paper_model_name,
+        model_description=model_description,
+        paper_arxiv_id=paper_arxiv_id)
+
+    dataset = CocoDetection(os.path.join(DATA_ROOT, ANNO_SET), annotation_path)
 
     loader = create_loader(
         dataset,
@@ -97,12 +104,6 @@ def eval_model(model_name, paper_model_name, paper_arxiv_id, batch_size=64, mode
         pin_mem=True)
 
     iterator = tqdm.tqdm(loader, desc="Evaluation", mininterval=5)
-
-    evaluator = COCOEvaluator(
-        root=DATA_ROOT,
-        model_name=paper_model_name,
-        model_description=model_description,
-        paper_arxiv_id=paper_arxiv_id)
 
     with torch.no_grad():
         for i, (input, target) in enumerate(iterator):
