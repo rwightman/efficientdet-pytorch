@@ -55,9 +55,9 @@ model_list = [
            model_desc='Ported from official Google AI Tensorflow weights'),
     _entry('tf_efficientdet_d5', 'EfficientDet-D5', '1911.09070', batch_size=_bs(12),
            model_desc='Ported from official Google AI Tensorflow weights'),
-    _entry('tf_efficientdet_d6', 'EfficientDet-D6', '1911.09070', batch_size=_bs(10),
+    _entry('tf_efficientdet_d6', 'EfficientDet-D6', '1911.09070', batch_size=_bs(8),
            model_desc='Ported from official Google AI Tensorflow weights'),
-    _entry('tf_efficientdet_d7', 'EfficientDet-D7', '1911.09070', batch_size=_bs(6),
+    _entry('tf_efficientdet_d7', 'EfficientDet-D7', '1911.09070', batch_size=_bs(4),
            model_desc='Ported from official Google AI Tensorflow weights'),
 
     ## Weights trained by myself in PyTorch
@@ -105,6 +105,7 @@ def eval_model(model_name, paper_model_name, paper_arxiv_id, batch_size=64, mode
         pin_mem=True)
 
     iterator = tqdm.tqdm(loader, desc="Evaluation", mininterval=5)
+    evaluator.reset_time()
 
     with torch.no_grad():
         for i, (input, target) in enumerate(iterator):
