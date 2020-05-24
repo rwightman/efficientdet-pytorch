@@ -17,9 +17,10 @@ ANNO_SET = 'val2017'
 
 if is_server():
     DATA_ROOT = './.data/vision/coco'
-    #image_dir_zip = os.path.join('./.data/vision/coco', f'{ANNO_SET}.zip')
-    #extract_archive(from_path=image_dir_zip, to_path='./.data/vision/coco')
-else: # local settings
+    image_dir_zip = os.path.join('./.data/vision/coco', f'{ANNO_SET}.zip')
+    extract_archive(from_path=image_dir_zip, to_path='./.data/vision/coco')
+else:
+    # local settings
     DATA_ROOT = ''
 
 
