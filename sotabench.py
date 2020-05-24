@@ -43,9 +43,9 @@ def _entry(model_name, paper_model_name, paper_arxiv_id, batch_size=BATCH_SIZE, 
 # avoid overlap and confusion. Please contact me.
 model_list = [
     ## Weights ported by myself from other frameworks
-    _entry('tf_efficientdet_d0', 'EfficientDet-D0', '1911.09070', batch_size=_bs(96),
+    _entry('tf_efficientdet_d0', 'EfficientDet-D0', '1911.09070', batch_size=_bs(112),
            model_desc='Ported from official Google AI Tensorflow weights'),
-    _entry('tf_efficientdet_d1', 'EfficientDet-D1', '1911.09070', batch_size=_bs(64),
+    _entry('tf_efficientdet_d1', 'EfficientDet-D1', '1911.09070', batch_size=_bs(72),
            model_desc='Ported from official Google AI Tensorflow weights'),
     _entry('tf_efficientdet_d2', 'EfficientDet-D2', '1911.09070', batch_size=_bs(48),
            model_desc='Ported from official Google AI Tensorflow weights'),

@@ -72,7 +72,7 @@ efficientdet_model_param_dict = dict(
         box_class_repeats=3,
         pad_type='',
         redundant_bias=False,
-        backbone_args=dict(drop_rate=0.2, drop_path_rate=0.2),
+        backbone_args=dict(drop_path_rate=0.2),
         url='',  # no pretrained weights yet
     ),
     efficientdet_d1=dict(
@@ -84,7 +84,7 @@ efficientdet_model_param_dict = dict(
         box_class_repeats=3,
         pad_type='',
         redundant_bias=False,
-        backbone_args=dict(drop_rate=0.2, drop_path_rate=0.2),
+        backbone_args=dict(drop_path_rate=0.2),
         url='',  # no pretrained weights yet
     ),
     efficientdet_d2=dict(
@@ -96,7 +96,7 @@ efficientdet_model_param_dict = dict(
         box_class_repeats=3,
         pad_type='',
         redundant_bias=False,
-        backbone_args=dict(drop_rate=0.3, drop_path_rate=0.2),
+        backbone_args=dict(drop_path_rate=0.2),
         url='',  # no pretrained weights yet
     ),
     efficientdet_d3=dict(
@@ -108,7 +108,7 @@ efficientdet_model_param_dict = dict(
         box_class_repeats=3,
         pad_type='',
         redundant_bias=False,
-        backbone_args=dict(drop_rate=0.3, drop_path_rate=0.2),
+        backbone_args=dict(drop_path_rate=0.2),
         url='',  # no pretrained weights yet
     ),
 
@@ -124,7 +124,7 @@ efficientdet_model_param_dict = dict(
         box_class_repeats=3,
         pad_type='',
         redundant_bias=False,
-        backbone_args=dict(drop_rate=0.2, drop_path_rate=0.2),
+        backbone_args=dict(drop_path_rate=0.2),
         url='',  # no pretrained weights yet
     ),
     mixdet_l=dict(
@@ -136,7 +136,7 @@ efficientdet_model_param_dict = dict(
         box_class_repeats=3,
         pad_type='',
         redundant_bias=False,
-        backbone_args=dict(drop_rate=0.2, drop_path_rate=0.2),
+        backbone_args=dict(drop_path_rate=0.2),
         url='',  # no pretrained weights yet
     ),
 
@@ -148,7 +148,7 @@ efficientdet_model_param_dict = dict(
         fpn_channels=64,
         fpn_cell_repeats=3,
         box_class_repeats=3,
-        backbone_args=dict(drop_rate=0.2, drop_path_rate=0.2),
+        backbone_args=dict(drop_path_rate=0.2),
         url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d0-d92fd44f.pth',
     ),
     tf_efficientdet_d1=dict(
@@ -158,7 +158,7 @@ efficientdet_model_param_dict = dict(
         fpn_channels=88,
         fpn_cell_repeats=4,
         box_class_repeats=3,
-        backbone_args=dict(drop_rate=0.2, drop_path_rate=0.2),
+        backbone_args=dict(drop_path_rate=0.2),
         url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d1-4c7ebaf2.pth'
     ),
     tf_efficientdet_d2=dict(
@@ -168,7 +168,7 @@ efficientdet_model_param_dict = dict(
         fpn_channels=112,
         fpn_cell_repeats=5,
         box_class_repeats=3,
-        backbone_args=dict(drop_rate=0.3, drop_path_rate=0.2),
+        backbone_args=dict(drop_path_rate=0.2),
         url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d2-cb4ce77d.pth',
     ),
     tf_efficientdet_d3=dict(
@@ -178,7 +178,7 @@ efficientdet_model_param_dict = dict(
         fpn_channels=160,
         fpn_cell_repeats=6,
         box_class_repeats=4,
-        backbone_args=dict(drop_rate=0.3, drop_path_rate=0.2),
+        backbone_args=dict(drop_path_rate=0.2),
         url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d3-b0ea2cbc.pth',
     ),
     tf_efficientdet_d4=dict(
@@ -188,7 +188,7 @@ efficientdet_model_param_dict = dict(
         fpn_channels=224,
         fpn_cell_repeats=7,
         box_class_repeats=4,
-        backbone_args=dict(drop_rate=0.4, drop_path_rate=0.2),
+        backbone_args=dict(drop_path_rate=0.2),
         url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d4-5b370b7a.pth',
     ),
     tf_efficientdet_d5=dict(
@@ -198,7 +198,7 @@ efficientdet_model_param_dict = dict(
         fpn_channels=288,
         fpn_cell_repeats=7,
         box_class_repeats=4,
-        backbone_args=dict(drop_rate=0.4, drop_path_rate=0.2),
+        backbone_args=dict(drop_path_rate=0.2),
         url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d5-ef44aea8.pth',
     ),
     tf_efficientdet_d6=dict(
@@ -209,7 +209,7 @@ efficientdet_model_param_dict = dict(
         fpn_cell_repeats=8,
         box_class_repeats=5,
         fpn_name='bifpn_sum',  # Use unweighted sum for training stability.
-        backbone_args=dict(drop_rate=0.5, drop_path_rate=0.2),
+        backbone_args=dict(drop_path_rate=0.2),
         url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d6-51cb0132.pth'
     ),
     tf_efficientdet_d7=dict(
@@ -221,7 +221,7 @@ efficientdet_model_param_dict = dict(
         box_class_repeats=5,
         anchor_scale=5.0,
         fpn_name='bifpn_sum',  # Use unweighted sum for training stability.
-        backbone_args=dict(drop_rate=0.5, drop_path_rate=0.2),
+        backbone_args=dict(drop_path_rate=0.2),
         url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d7-f05bf714.pth'
     ),
 )
