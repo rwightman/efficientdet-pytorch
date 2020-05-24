@@ -4,6 +4,8 @@ Hacked together by Ross Wightman
 """
 import torch
 import torch.nn as nn
+
+from timm.utils import ModelEma
 from .anchors import Anchors, AnchorLabeler, generate_detections, MAX_DETECTION_POINTS
 from .loss import DetectionLoss
 
@@ -100,3 +102,16 @@ class DetBenchTrain(nn.Module):
                 x.shape[0], class_out, box_out, self.anchors.boxes, indices, classes,
                 target['img_scale'], target['img_size'])
         return output
+
+
+def unwrap_bench(model):
+    # Unwrap a model in support bench so that various other fns can access the weights and attribs of the
+    # underlying model directly
+    if isinstance(model, ModelEma):  # unwrap ModelEma
+        return unwrap_bench(model.ema)
+    elif hasattr(model, 'module'):  # unwrap DDP
+        return unwrap_bench(model.module)
+    elif hasattr(model, 'model'):  # unwrap Bench -> model
+        return unwrap_bench(model.model)
+    else:
+        return model

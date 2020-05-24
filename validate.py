@@ -16,9 +16,9 @@ try:
 except ImportError:
     has_amp = False
 
-from effdet import EfficientDet, get_efficientdet_config, DetBenchPredict, load_checkpoint
+from effdet import create_model
 from data import create_loader, CocoDetection
-from utils import AverageMeter
+from timm.utils import AverageMeter, setup_default_logging
 
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
@@ -33,7 +33,7 @@ parser.add_argument('--anno', default='val2017',
                     help='mscoco annotation set (one of val2017, train2017, test-dev2017)')
 parser.add_argument('--model', '-m', metavar='MODEL', default='tf_efficientdet_d1',
                     help='model architecture (default: tf_efficientdet_d1)')
-parser.add_argument('--no-redundant-bias', action='store_true', default=False,
+parser.add_argument('--no-redundant-bias', action='store_true', default=None,
                     help='remove redundant bias layers if True, need False for official TF weights')
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
@@ -68,22 +68,29 @@ parser.add_argument('--results', default='./results.json', type=str, metavar='FI
 
 
 def validate(args):
+    setup_default_logging()
+
     # might as well try to validate something
     args.pretrained = args.pretrained or not args.checkpoint
     args.prefetcher = not args.no_prefetcher
-    args.redundant_bias = not args.no_redundant_bias
+    if args.no_redundant_bias is None:
+        args.redundant_bias = None
+    else:
+        args.redundant_bias = not args.no_redundant_bias
 
     # create model
-    config = get_efficientdet_config(args.model)
-    config.redundant_bias = args.redundant_bias
-    model = EfficientDet(config)
-    if args.checkpoint:
-        load_checkpoint(model, args.checkpoint)
+    bench = create_model(
+        args.model,
+        bench_task='predict',
+        pretrained=args.pretrained,
+        checkpoint_path=args.checkpoint,
+        redundant_bias=args.redundant_bias,
+    )
+    input_size = bench.config.image_size
 
-    param_count = sum([m.numel() for m in model.parameters()])
+    param_count = sum([m.numel() for m in bench.parameters()])
     print('Model %s created, param count: %d' % (args.model, param_count))
 
-    bench = DetBenchPredict(model, config)
     bench = bench.cuda()
     if has_amp:
         print('Using AMP mixed precision.')
@@ -104,7 +111,7 @@ def validate(args):
 
     loader = create_loader(
         dataset,
-        input_size=config.image_size,
+        input_size=input_size,
         batch_size=args.batch_size,
         use_prefetcher=args.prefetcher,
         interpolation=args.interpolation,
@@ -114,7 +121,7 @@ def validate(args):
 
     img_ids = []
     results = []
-    model.eval()
+    bench.eval()
     batch_time = AverageMeter()
     end = time.time()
     with torch.no_grad():

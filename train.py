@@ -19,6 +19,8 @@ import time
 import yaml
 from datetime import datetime
 
+from effdet.bench import unwrap_bench
+
 try:
     from apex import amp
     from apex.parallel import DistributedDataParallel as DDP
@@ -28,18 +30,15 @@ except ImportError:
     from torch.nn.parallel import DistributedDataParallel as DDP
     has_apex = False
 
-from effdet import get_efficientdet_config, EfficientDet, DetBenchPredict, DetBenchTrain, COCOEvaluator
+from effdet import create_model, COCOEvaluator
+from data import create_loader, CocoDetection
 
-from data import CocoDetection, create_loader
-
-from timm.data import FastCollateMixup, mixup_batch
 from timm.models import resume_checkpoint, load_checkpoint
 from timm.utils import *
 from timm.optim import create_optimizer
 from timm.scheduler import create_scheduler
 
 import torch
-import torch.nn as nn
 import torchvision.utils
 
 torch.backends.cudnn.benchmark = True
@@ -62,6 +61,8 @@ parser.add_argument('--redundant-bias', action='store_true', default=False,
                     help='include redundant bias layers if True, need True to match official TF weights')
 parser.add_argument('--pretrained', action='store_true', default=False,
                     help='Start with pretrained version of specified network (if avail)')
+parser.add_argument('--no-pretrained-backbone', action='store_true', default=False,
+                    help='Do not start with pretrained backbone weights, fully random.')
 parser.add_argument('--initial-checkpoint', default='', type=str, metavar='PATH',
                     help='Initialize model from this checkpoint (default: none)')
 parser.add_argument('--resume', default='', type=str, metavar='PATH',
@@ -152,14 +153,6 @@ parser.add_argument('--smoothing', type=float, default=0.1,
                     help='label smoothing (default: 0.1)')
 parser.add_argument('--train-interpolation', type=str, default='random',
                     help='Training interpolation (random, bilinear, bicubic default: "random")')
-
-# Batch norm parameters (only works with gen_efficientnet based models currently)
-parser.add_argument('--bn-tf', action='store_true', default=False,
-                    help='Use Tensorflow BatchNorm defaults for models that support it (default: False)')
-parser.add_argument('--bn-momentum', type=float, default=None,
-                    help='BatchNorm momentum override (if not None)')
-parser.add_argument('--bn-eps', type=float, default=None,
-                    help='BatchNorm epsilon override (if not None)')
 parser.add_argument('--sync-bn', action='store_true',
                     help='Enable NVIDIA Apex or Torch synchronized BatchNorm.')
 parser.add_argument('--dist-bn', type=str, default='',
@@ -168,8 +161,6 @@ parser.add_argument('--dist-bn', type=str, default='',
 # Model Exponential Moving Average
 parser.add_argument('--model-ema', action='store_true', default=False,
                     help='Enable tracking moving average of model weights')
-parser.add_argument('--model-ema-force-cpu', action='store_true', default=False,
-                    help='Force ema to be tracked on CPU, rank=0 node only. Disables EMA validation.')
 parser.add_argument('--model-ema-decay', type=float, default=0.9998,
                     help='decay factor for model weights moving average (default: 0.9998)')
 
@@ -216,22 +207,11 @@ def _parse_args():
     return args, args_text
 
 
-def _unwrap_bench(model):
-    # FIXME push into CheckpointSaver or come up with cleaner support bench <-> model relationship
-    if isinstance(model, ModelEma):  # unwrap ModelEma
-        return _unwrap_bench(model.ema)
-    elif hasattr(model, 'module'):  # unwrap DDP
-        return _unwrap_bench(model.module)
-    elif hasattr(model, 'model'):  # unwrap Bench -> model
-        return _unwrap_bench(model.model)
-    else:
-        return model
-
-
 def main():
     setup_default_logging()
     args, args_text = _parse_args()
 
+    args.pretrained_backbone = not args.no_pretrained_backbone
     args.prefetcher = not args.no_prefetcher
     args.distributed = False
     if 'WORLD_SIZE' in os.environ:
@@ -255,26 +235,20 @@ def main():
 
     torch.manual_seed(args.seed + args.rank)
 
-    # create model
-    config = get_efficientdet_config(args.model)
-    config.redundant_bias = args.redundant_bias  # redundant conv + BN bias layers (True to match official models)
-    model = EfficientDet(config)
-    model = DetBenchTrain(model, config)
-
-    # FIXME create model factory, pretrained zoo
-    # model = create_model(
-    #     args.model,
-    #     pretrained=args.pretrained,
+    model = create_model(
+        args.model,
+        bench_task='train',
+        pretrained=args.pretrained,
+        pretrained_backbone=args.pretrained_backbone,
+        redundant_bias=args.redundant_bias,
+        checkpoint_path=args.initial_checkpoint,
+    )
+    # FIXME decide which args to keep and overlay on config / pass to backbone
     #     num_classes=args.num_classes,
     #     drop_rate=args.drop,
-    #     drop_connect_rate=args.drop_connect,  # DEPRECATED, use drop_path
     #     drop_path_rate=args.drop_path,
     #     drop_block_rate=args.drop_block,
-    #     global_pool=args.gp,
-    #     bn_tf=args.bn_tf,
-    #     bn_momentum=args.bn_momentum,
-    #     bn_eps=args.bn_eps,
-    #     checkpoint_path=args.initial_checkpoint)
+    input_size = model.config.image_size
 
     if args.local_rank == 0:
         logging.info('Model %s created, param count: %d' %
@@ -294,7 +268,7 @@ def main():
     resume_state = {}
     resume_epoch = None
     if args.resume:
-        resume_state, resume_epoch = resume_checkpoint(_unwrap_bench(model), args.resume)
+        resume_state, resume_epoch = resume_checkpoint(unwrap_bench(model), args.resume)
     if resume_state and not args.no_resume_opt:
         if 'optimizer' in resume_state:
             if args.local_rank == 0:
@@ -311,11 +285,10 @@ def main():
         # Important to create EMA model after cuda(), DP wrapper, and AMP but before SyncBN and DDP wrapper
         model_ema = ModelEma(
             model,
-            decay=args.model_ema_decay,
-            device='cpu' if args.model_ema_force_cpu else '')
+            decay=args.model_ema_decay)
             #resume=args.resume)  # FIXME bit of a mess with bench
         if args.resume:
-            load_checkpoint(_unwrap_bench(model_ema), args.resume, use_ema=True)
+            load_checkpoint(unwrap_bench(model_ema), args.resume, use_ema=True)
 
     if args.distributed:
         if args.sync_bn:
@@ -363,7 +336,7 @@ def main():
 
     loader_train = create_loader(
         dataset_train,
-        input_size=config.image_size,
+        input_size=input_size,
         batch_size=args.batch_size,
         is_training=True,
         use_prefetcher=args.prefetcher,
@@ -389,7 +362,7 @@ def main():
 
     loader_eval = create_loader(
         dataset_eval,
-        input_size=config.image_size,
+        input_size=input_size,
         batch_size=args.validation_batch_size_multiplier * args.batch_size,
         is_training=False,
         use_prefetcher=args.prefetcher,
@@ -434,14 +407,14 @@ def main():
                     logging.info("Distributing BatchNorm running means and vars")
                 distribute_bn(model, args.world_size, args.dist_bn == 'reduce')
 
-            eval_metrics = validate(model, loader_eval, args, evaluator)
-
-            if model_ema is not None and not args.model_ema_force_cpu:
+            # the overhead of evaluating with coco style datasets is fairly high, so just ema or non, not both
+            if model_ema is not None:
                 if args.distributed and args.dist_bn in ('broadcast', 'reduce'):
                     distribute_bn(model_ema, args.world_size, args.dist_bn == 'reduce')
 
-                ema_eval_metrics = validate(model_ema.ema, loader_eval, args, log_suffix=' (EMA)')
-                eval_metrics = ema_eval_metrics
+                eval_metrics = validate(model_ema.ema, loader_eval, args, evaluator, log_suffix=' (EMA)')
+            else:
+                eval_metrics = validate(model, loader_eval, args, evaluator)
 
             if lr_scheduler is not None:
                 # step LR for next epoch
@@ -455,8 +428,8 @@ def main():
                 # save proper checkpoint with eval metric
                 save_metric = eval_metrics[eval_metric]
                 best_metric, best_epoch = saver.save_checkpoint(
-                    _unwrap_bench(model), optimizer, args,
-                    epoch=epoch, model_ema=_unwrap_bench(model_ema), metric=save_metric, use_amp=use_amp)
+                    unwrap_bench(model), optimizer, args,
+                    epoch=epoch, model_ema=unwrap_bench(model_ema), metric=save_metric, use_amp=use_amp)
 
     except KeyboardInterrupt:
         pass
@@ -545,7 +518,7 @@ def train_epoch(
         if saver is not None and args.recovery_interval and (
                 last_batch or (batch_idx + 1) % args.recovery_interval == 0):
             saver.save_recovery(
-                _unwrap_bench(model), optimizer, args, epoch, model_ema=_unwrap_bench(model_ema),
+                unwrap_bench(model), optimizer, args, epoch, model_ema=unwrap_bench(model_ema),
                 use_amp=use_amp, batch_idx=batch_idx)
 
         if lr_scheduler is not None:

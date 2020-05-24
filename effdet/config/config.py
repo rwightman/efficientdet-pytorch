@@ -2,13 +2,13 @@
 
 Adapted from official impl at https://github.com/google/automl/tree/master/efficientdet
 
-TODO use a different config system, separate model from train specific hparams
+TODO use a different config system (OmegaConfig -> Hydra?), separate model from train specific hparams
 """
 
 from omegaconf import OmegaConf
 
 
-def default_detection_configs():
+def default_detection_model_configs():
     """Returns a default detection configs."""
     h = OmegaConf.create()
 
@@ -18,16 +18,11 @@ def default_detection_configs():
     h.backbone_name = 'tf_efficientnet_b1'
     h.backbone_args = None  # FIXME sort out kwargs vs config for backbone creation
 
-    # input preprocessing parameters
+    # model specific, input preprocessing parameters
     h.image_size = 640
-    h.input_rand_hflip = True
-    h.train_scale_min = 0.1
-    h.train_scale_max = 2.0
-    h.autoaugment_policy = None
 
-    # dataset specific parameters
+    # dataset specific head parameters
     h.num_classes = 90
-    h.skip_crowd_during_training = True
 
     # model architecture
     h.min_level = 3
@@ -36,7 +31,7 @@ def default_detection_configs():
     h.num_scales = 3
     h.aspect_ratios = [(1.0, 1.0), (1.4, 0.7), (0.7, 1.4)]
     h.anchor_scale = 4.0
-    h.pad_type = 'same'
+    h.pad_type = 'same'  # original TF models require an equivalent of Tensorflow 'SAME' padding
 
     # For detection.
     h.box_class_repeats = 3
@@ -48,141 +43,165 @@ def default_detection_configs():
     h.conv_bn_relu_pattern = False
     h.use_native_resize_op = False
     h.pooling_type = None
-    h.redundant_bias = True  # TF compatible models have back to back bias + BN layers
+    h.redundant_bias = True  # original TF models have back to back bias + BN layers, not necessary!
 
     # version.
     h.fpn_name = None
     h.fpn_config = None
     h.fpn_drop_path_rate = 0.  # No stochastic depth in default.
 
-    # FIXME move config below this point to a different config, add hierarchy, or use args as I usually do?
-
-    # optimization
-    h.momentum = 0.9
-    h.learning_rate = 0.08
-    h.lr_warmup_init = 0.008
-    h.lr_warmup_epoch = 1.0
-    h.first_lr_drop_epoch = 200.0
-    h.second_lr_drop_epoch = 250.0
-    h.clip_gradients_norm = 10.0
-    h.num_epochs = 300
-
-    # regularization l2 loss.
-    h.weight_decay = 4e-5
-
-    # classification loss
+    # classification loss (used by train bench)
     h.alpha = 0.25
     h.gamma = 1.5
 
-    # localization loss
+    # localization loss (used by train bench)
     h.delta = 0.1
     h.box_loss_weight = 50.0
-
-    h.lr_decay_method = 'cosine'
-    h.moving_average_decay = 0.9998
-    h.ckpt_var_scope = None
 
     return h
 
 
-efficientdet_model_param_dict = {
-    'tf_efficientdet_d0':
-        dict(
-            name='efficientdet_d0',
-            backbone_name='tf_efficientnet_b0',
-            image_size=512,
-            fpn_channels=64,
-            fpn_cell_repeats=3,
-            box_class_repeats=3,
-            redundant_bias=True,
-            backbone_args=dict(drop_rate=0.2, drop_path_rate=0.2),
-        ),
-    'tf_efficientdet_d1':
-        dict(
-            name='efficientdet_d1',
-            backbone_name='tf_efficientnet_b1',
-            image_size=640,
-            fpn_channels=88,
-            fpn_cell_repeats=4,
-            box_class_repeats=3,
-            redundant_bias=True,
-            backbone_args=dict(drop_rate=0.2, drop_path_rate=0.2),
-        ),
-    'tf_efficientdet_d2':
-        dict(
-            name='efficientdet_d2',
-            backbone_name='tf_efficientnet_b2',
-            image_size=768,
-            fpn_channels=112,
-            fpn_cell_repeats=5,
-            box_class_repeats=3,
-            redundant_bias=True,
-            backbone_args=dict(drop_rate=0.3, drop_path_rate=0.2),
-        ),
-    'tf_efficientdet_d3':
-        dict(
-            name='efficientdet_d3',
-            backbone_name='tf_efficientnet_b3',
-            image_size=896,
-            fpn_channels=160,
-            fpn_cell_repeats=6,
-            box_class_repeats=4,
-            redundant_bias=True,
-            backbone_args=dict(drop_rate=0.3, drop_path_rate=0.2),
-        ),
-    'tf_efficientdet_d4':
-        dict(
-            name='efficientdet_d4',
-            backbone_name='tf_efficientnet_b4',
-            image_size=1024,
-            fpn_channels=224,
-            fpn_cell_repeats=7,
-            box_class_repeats=4,
-            redundant_bias=True,
-            backbone_args=dict(drop_rate=0.4, drop_path_rate=0.2),
-        ),
-    'tf_efficientdet_d5':
-        dict(
-            name='efficientdet_d5',
-            backbone_name='tf_efficientnet_b5',
-            image_size=1280,
-            fpn_channels=288,
-            fpn_cell_repeats=7,
-            box_class_repeats=4,
-            redundant_bias=True,
-            backbone_args=dict(drop_rate=0.4, drop_path_rate=0.2),
-        ),
-    'tf_efficientdet_d6':
-        dict(
-            name='efficientdet_d6',
-            backbone_name='tf_efficientnet_b6',
-            image_size=1280,
-            fpn_channels=384,
-            fpn_cell_repeats=8,
-            box_class_repeats=5,
-            fpn_name='bifpn_sum',  # Use unweighted sum for training stability.
-            redundant_bias=True,
-            backbone_args=dict(drop_rate=0.5, drop_path_rate=0.2),
-        ),
-    'tf_efficientdet_d7':
-        dict(
-            name='efficientdet_d7',
-            backbone_name='tf_efficientnet_b6',
-            image_size=1536,
-            fpn_channels=384,
-            fpn_cell_repeats=8,
-            box_class_repeats=5,
-            anchor_scale=5.0,
-            fpn_name='bifpn_sum',  # Use unweighted sum for training stability.
-            redundant_bias=True,
-            backbone_args=dict(drop_rate=0.5, drop_path_rate=0.2),
-        ),
-}
+efficientdet_model_param_dict = dict(
+    # Models with PyTorch friendly padding and PyTorch pretrained backbones.
+    efficientdet_d0=dict(
+        name='efficientdet_d0',
+        backbone_name='efficientnet_b0',
+        image_size=512,
+        fpn_channels=64,
+        fpn_cell_repeats=3,
+        box_class_repeats=3,
+        pad_type='',
+        redundant_bias=False,
+        backbone_args=dict(drop_rate=0.2, drop_path_rate=0.2),
+        url='',  # no pretrained weights yet
+    ),
+    efficientdet_d1=dict(
+        name='efficientdet_d1',
+        backbone_name='efficientnet_b1',
+        image_size=640,
+        fpn_channels=88,
+        fpn_cell_repeats=4,
+        box_class_repeats=3,
+        pad_type='',
+        redundant_bias=False,
+        backbone_args=dict(drop_rate=0.2, drop_path_rate=0.2),
+        url='',  # no pretrained weights yet
+    ),
+    efficientdet_d2=dict(
+        name='efficientdet_d2',
+        backbone_name='efficientnet_b2',
+        image_size=768,
+        fpn_channels=112,
+        fpn_cell_repeats=5,
+        box_class_repeats=3,
+        pad_type='',
+        redundant_bias=False,
+        backbone_args=dict(drop_rate=0.3, drop_path_rate=0.2),
+        url='',  # no pretrained weights yet
+    ),
+    efficientdet_d3=dict(
+        name='efficientdet_d3',
+        backbone_name='efficientnet_b3',
+        image_size=768,
+        fpn_channels=112,
+        fpn_cell_repeats=5,
+        box_class_repeats=3,
+        pad_type='',
+        redundant_bias=False,
+        backbone_args=dict(drop_rate=0.3, drop_path_rate=0.2),
+        url='',  # no pretrained weights yet
+    ),
+
+    # Models ported from Tensorflow with pretrained backbones ported from Tensorflow
+    tf_efficientdet_d0=dict(
+        name='tf_efficientdet_d0',
+        backbone_name='tf_efficientnet_b0',
+        image_size=512,
+        fpn_channels=64,
+        fpn_cell_repeats=3,
+        box_class_repeats=3,
+        backbone_args=dict(drop_rate=0.2, drop_path_rate=0.2),
+        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d0-d92fd44f.pth',
+    ),
+    tf_efficientdet_d1=dict(
+        name='tf_efficientdet_d1',
+        backbone_name='tf_efficientnet_b1',
+        image_size=640,
+        fpn_channels=88,
+        fpn_cell_repeats=4,
+        box_class_repeats=3,
+        backbone_args=dict(drop_rate=0.2, drop_path_rate=0.2),
+        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d1-4c7ebaf2.pth'
+    ),
+    tf_efficientdet_d2=dict(
+        name='tf_efficientdet_d2',
+        backbone_name='tf_efficientnet_b2',
+        image_size=768,
+        fpn_channels=112,
+        fpn_cell_repeats=5,
+        box_class_repeats=3,
+        backbone_args=dict(drop_rate=0.3, drop_path_rate=0.2),
+        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d2-cb4ce77d.pth',
+    ),
+    tf_efficientdet_d3=dict(
+        name='tf_efficientdet_d3',
+        backbone_name='tf_efficientnet_b3',
+        image_size=896,
+        fpn_channels=160,
+        fpn_cell_repeats=6,
+        box_class_repeats=4,
+        backbone_args=dict(drop_rate=0.3, drop_path_rate=0.2),
+        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d3-b0ea2cbc.pth',
+    ),
+    tf_efficientdet_d4=dict(
+        name='tf_efficientdet_d4',
+        backbone_name='tf_efficientnet_b4',
+        image_size=1024,
+        fpn_channels=224,
+        fpn_cell_repeats=7,
+        box_class_repeats=4,
+        backbone_args=dict(drop_rate=0.4, drop_path_rate=0.2),
+        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d4-5b370b7a.pth',
+    ),
+    tf_efficientdet_d5=dict(
+        name='tf_efficientdet_d5',
+        backbone_name='tf_efficientnet_b5',
+        image_size=1280,
+        fpn_channels=288,
+        fpn_cell_repeats=7,
+        box_class_repeats=4,
+        backbone_args=dict(drop_rate=0.4, drop_path_rate=0.2),
+        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d5-ef44aea8.pth',
+    ),
+    tf_efficientdet_d6=dict(
+        name='tf_efficientdet_d6',
+        backbone_name='tf_efficientnet_b6',
+        image_size=1280,
+        fpn_channels=384,
+        fpn_cell_repeats=8,
+        box_class_repeats=5,
+        fpn_name='bifpn_sum',  # Use unweighted sum for training stability.
+        backbone_args=dict(drop_rate=0.5, drop_path_rate=0.2),
+        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d6-51cb0132.pth'
+    ),
+    tf_efficientdet_d7=dict(
+        name='tf_efficientdet_d7',
+        backbone_name='tf_efficientnet_b6',
+        image_size=1536,
+        fpn_channels=384,
+        fpn_cell_repeats=8,
+        box_class_repeats=5,
+        anchor_scale=5.0,
+        fpn_name='bifpn_sum',  # Use unweighted sum for training stability.
+        backbone_args=dict(drop_rate=0.5, drop_path_rate=0.2),
+        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d7-f05bf714.pth'
+    ),
+)
 
 
-def get_efficientdet_config(model_name='efficientdet_d1'):
+def get_efficientdet_config(model_name='tf_efficientdet_d1'):
     """Get the default config for EfficientDet based on model name."""
-    h = default_detection_configs()
+    h = default_detection_model_configs()
     h.update(efficientdet_model_param_dict[model_name])
     return h
 
