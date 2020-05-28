@@ -1,14 +1,26 @@
 # EfficientDet (PyTorch)
 
-This is a work in progress PyTorch implementation of EfficientDet. 
+A PyTorch implementation of EfficientDet.
 
 It is based on the
 * official Tensorflow implementation by [Mingxing Tan and the Google Brain team](https://github.com/google/automl)
 * paper by Mingxing Tan, Ruoming Pang, Quoc V. Le [EfficientDet: Scalable and Efficient Object Detection](https://arxiv.org/abs/1911.09070) 
 
-I am aware there are other PyTorch implementations. Their approach didn't fit well with my aim to replicate the Tensorflow models closely enough to allow weight ports while still maintaining a PyTorch feel and a high degree of flexibility for future additions. So, this is built from scratch and leverages my previous EfficientNet work.
+There are other PyTorch implementations. Either their approach didn't fit my aim to correctly reproduce the Tensorflow models (but with a PyTorch feel and flexibility) or they cannot come close to replicating MS COCO training from scratch.
+
+Aside from the default model configs, there is a lot of flexibility to facilitate experiments and rapid improvements here -- some options based on the official Tensorflow impl, some of my own:
+* BiFPN connections and combination mode are fully configurable and not baked into the model code
+* BiFPN and head modules can be switched between depthwise separable or standard convolutions
+* Activations, batch norm layers are switchable via arguments (soon config)
+* Any backbone in my `timm` model collection that supports feature extraction (`features_only` arg) can be used as a bacbkone.
+  * Currently this is includes to all models implemented by the EficientNet and MobileNetv3 classes (which also includes MNasNet, MobileNetV2, MixNet and more). More soon...
+
 
 ## Updates / Tasks
+
+### 2020-05-27
+* A D0 result in, started before last improvements: `Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.331`
+* Another D0 and D1 running with the latest code.
 
 ### 2020-05-22 / 23
 A bunch of changes:
@@ -24,37 +36,9 @@ Initial D1 training results in -- close but not quite there. Definitely in reach
 
 Biggest missing element is proper per-epoch mAP validation for better checkpoint selection (than loss based). I was resisting doing full COCO eval because it's so slow, but may throw that in for now...
 
-D1:
-```
- Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.382
- Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.577
- Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.407
- Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.190
- Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.437
- Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.552
- Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.314
- Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.489
- Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.520
- Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.286
- Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.591
- Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.713
-```
+D1: `Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.382`
 
-Previous D0 result:
-```
- Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.324
- Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.513
- Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.342
- Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.121
- Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.383
- Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.499
- Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.280
- Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.426
- Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.452
- Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.188
- Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.532
- Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.668
-```
+Previous D0 result: `Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.324`
 
 ### 2020-05-02
 First decent MSCOCO training results (from scratch, w/ pretrained classification backbone weights as starting point). 32.4 mAP for D0. Working on improvements and D1 trials still running.
@@ -83,7 +67,8 @@ Initial code with working validation posted. Yes, it's a little slow, but I thin
   - [X] Integrate MSCOCO eval metric calcs
 - [x] Some cleanup, testing
 - [x] Submit to test-dev server, all good
-- [ ] Add torch hub support and pretrained URL based weight download
+- [x] pretrained URL based weight download
+- [ ] Torch hub
 - [x] Remove redundant bias layers that exist in the official impl and weights
 - [ ] Add visualization support
 - [x] Performance improvements, numpy TF detection code -> optimized PyTorch
@@ -157,13 +142,19 @@ TODO: Need an inference script
 
 ### Run Training
 
-`./distributed_train.sh 2 /mscoco --model tf_efficientdet_d0 -b 16 --amp  --lr .05 --warmup-epochs 5  --sync-bn --opt fusedmomentum --fill-color mean --model-ema`
+`./distributed_train.sh 2 /mscoco --model tf_efficientdet_d0 -b 16 --amp  --lr .04 --warmup-epochs 5  --sync-bn --opt fusedmomentum --fill-color mean --model-ema`
 
 NOTE:
 * Training script currently defaults to a model that does NOT have redundant conv + BN bias layers like the official models, set correct flag when validating.
 * I've only trained with img mean (`--fill-color mean`) as the background for crop/scale/aspect fill, the official repo uses black pixel (0) (`--fill-color 0`). Both likely work fine.
 * The official training code uses EMA weight averaging by default, it's not clear there is a point in doing this with the cosine LR schedule, I find the non-EMA weights end up better than EMA in the last 10-20% of training epochs 
 * The default h-params is a very close to unstable (exploding loss), don't try using Nesterov momentum. Try to keep the batch size up, use sync-bn.
+
+### Examples of Training / Fine-Tuning on Alternate Datasets
+
+* Alex Shonenkov has a clear and concise Kaggle kernel which illustrates fine-tuning these models for detecting wheat heads: https://www.kaggle.com/shonenkov/training-efficientdet
+* If you have a good example script or kernel training these models with a different dataset, feel free to notify me for inclusion here...
+
 
 ## Results
 
