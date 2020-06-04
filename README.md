@@ -58,7 +58,7 @@ TF ported D0 weights:
  Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.686037
 ```
 
-Pretraiend weights added for this model `efficientdet_d0`  (Tensorflow port is `tf_efficientdet_d0`)
+Pretrained weights added for this model `efficientdet_d0`  (Tensorflow port is `tf_efficientdet_d0`)
 
 ### 2020-05-27
 * A D0 result in, started before last improvements: `Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.331`
