@@ -4,7 +4,8 @@ from .config import get_efficientdet_config
 from .helpers import load_pretrained, load_checkpoint
 
 
-def create_model(model_name, bench_task='', pretrained=False, checkpoint_path='', **kwargs):
+def create_model(
+        model_name, bench_task='', pretrained=False, checkpoint_path='', checkpoint_ema=False, **kwargs):
     config = get_efficientdet_config(model_name)
 
     pretrained_backbone = kwargs.pop('pretrained_backbone', True)
@@ -21,7 +22,7 @@ def create_model(model_name, bench_task='', pretrained=False, checkpoint_path=''
     # FIXME handle different head classes / anchors and re-init of necessary layers w/ pretrained load
 
     if checkpoint_path:
-        load_checkpoint(model, checkpoint_path)
+        load_checkpoint(model, checkpoint_path, use_ema=checkpoint_ema)
     elif pretrained:
         load_pretrained(model, config.url)
 
