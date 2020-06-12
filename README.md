@@ -18,6 +18,12 @@ Aside from the default model configs, there is a lot of flexibility to facilitat
 
 ## Updates / Tasks
 
+### 2020-06-12
+
+* Additional experimental model configs based on MobileNetV2, MobileNetV3, MixNet, EfficientNet-Lite. Requires
+update to `timm==0.1.28` for string based activation factory.
+* Redundant bias config handled more consistency, defaults to config unless overridden by arg
+
 ### 2020-06-04
 
 Latest results in and training goal achieved. Slightly bested the TF model mAP results for D0 model.
