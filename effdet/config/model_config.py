@@ -24,16 +24,17 @@ def default_detection_model_configs():
     # dataset specific head parameters
     h.num_classes = 90
 
-    # model architecture
+    # feature + anchor config
     h.min_level = 3
     h.max_level = 7
     h.num_levels = h.max_level - h.min_level + 1
     h.num_scales = 3
     h.aspect_ratios = [(1.0, 1.0), (1.4, 0.7), (0.7, 1.4)]
     h.anchor_scale = 4.0
-    h.pad_type = 'same'  # original TF models require an equivalent of Tensorflow 'SAME' padding
 
-    # For detection.
+    # FPN and head config
+    h.pad_type = 'same'  # original TF models require an equivalent of Tensorflow 'SAME' padding
+    h.act_type = 'swish'
     h.box_class_repeats = 3
     h.fpn_cell_repeats = 3
     h.fpn_channels = 88
@@ -45,7 +46,6 @@ def default_detection_model_configs():
     h.pooling_type = None
     h.redundant_bias = True  # original TF models have back to back bias + BN layers, not necessary!
 
-    # version.
     h.fpn_name = None
     h.fpn_config = None
     h.fpn_drop_path_rate = 0.  # No stochastic depth in default.
@@ -62,7 +62,7 @@ def default_detection_model_configs():
 
 
 efficientdet_model_param_dict = dict(
-    # Models with PyTorch friendly padding and PyTorch pretrained backbones, training TBD
+    # Models with PyTorch friendly padding and my PyTorch pretrained backbones, training TBD
     efficientdet_d0=dict(
         name='efficientdet_d0',
         backbone_name='efficientnet_b0',
@@ -112,9 +112,22 @@ efficientdet_model_param_dict = dict(
         url='',  # no pretrained weights yet
     ),
 
-    # Experimental configs with alternate models, training TBD
-    # Note: any 'timm' model in the EfficientDet family can be used as a backone here.
-    # TODO: add support in config for activation via string/factory so we can use ReLU/ReLU6 for EffNet-Lite & Mnv2
+    # My own experimental configs with alternate models, training TBD
+    # Note: any 'timm' model in the EfficientDet family can be used as a backbone here.
+    efficientdet_w0=dict(
+        name='efficientdet_w0',  # 'wide'
+        backbone_name='efficientnet_b0',
+        image_size=512,
+        fpn_channels=80,
+        fpn_cell_repeats=3,
+        box_class_repeats=3,
+        pad_type='',
+        redundant_bias=False,
+        backbone_args=dict(
+            drop_path_rate=0.1,
+            feature_location='depthwise'),  # features from after DW/SE in IR block
+        url='',  # no pretrained weights yet
+    ),
     mixdet_m=dict(
         name='mixdet_m',
         backbone_name='mixnet_m',
@@ -124,7 +137,7 @@ efficientdet_model_param_dict = dict(
         box_class_repeats=3,
         pad_type='',
         redundant_bias=False,
-        backbone_args=dict(drop_path_rate=0.2),
+        backbone_args=dict(drop_path_rate=0.1),
         url='',  # no pretrained weights yet
     ),
     mixdet_l=dict(
@@ -137,6 +150,45 @@ efficientdet_model_param_dict = dict(
         pad_type='',
         redundant_bias=False,
         backbone_args=dict(drop_path_rate=0.2),
+        url='',  # no pretrained weights yet
+    ),
+    mobiledetv2_110d=dict(
+        name='mobiledetv2_110d',
+        backbone_name='mobilenetv2_110d',
+        image_size=384,
+        fpn_channels=48,
+        fpn_cell_repeats=3,
+        box_class_repeats=3,
+        pad_type='',
+        act_type='relu6',
+        redundant_bias=False,
+        backbone_args=dict(drop_path_rate=0.05),
+        url='',  # no pretrained weights yet
+    ),
+    mobiledetv2_120d=dict(
+        name='mobiledetv2_120d',
+        backbone_name='mobilenetv2_120d',
+        image_size=512,
+        fpn_channels=56,
+        fpn_cell_repeats=3,
+        box_class_repeats=3,
+        pad_type='',
+        act_type='relu6',
+        redundant_bias=False,
+        backbone_args=dict(drop_path_rate=0.1),
+        url='',  # no pretrained weights yet
+    ),
+    mobiledetv3_large=dict(
+        name='mobiledetv3_large',
+        backbone_name='mobilenetv3_large_100',
+        image_size=512,
+        fpn_channels=64,
+        fpn_cell_repeats=3,
+        box_class_repeats=3,
+        pad_type='',
+        act_type='hard_swish',
+        redundant_bias=False,
+        backbone_args=dict(drop_path_rate=0.1),
         url='',  # no pretrained weights yet
     ),
 
@@ -223,6 +275,63 @@ efficientdet_model_param_dict = dict(
         fpn_name='bifpn_sum',  # Use unweighted sum for training stability.
         backbone_args=dict(drop_path_rate=0.2),
         url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d7-f05bf714.pth'
+    ),
+
+    # The lite configs are in TF automl repository but no weights yet and listed as 'not final'
+    tf_efficientdet_lite0=dict(
+        name='tf_efficientdet_lite0',
+        backbone_name='tf_efficientnet_lite0',
+        image_size=512,
+        fpn_channels=64,
+        fpn_cell_repeats=3,
+        box_class_repeats=3,
+        act_type='relu',
+        backbone_args=dict(drop_path_rate=0.1),
+        url='',  # no pretrained weights yet
+    ),
+    tf_efficientdet_lite1=dict(
+        name='tf_efficientdet_lite1',
+        backbone_name='tf_efficientnet_lite1',
+        image_size=640,
+        fpn_channels=88,
+        fpn_cell_repeats=4,
+        box_class_repeats=3,
+        act_type='relu',
+        backbone_args=dict(drop_path_rate=0.2),
+        url='',  # no pretrained weights yet
+    ),
+    tf_efficientdet_lite2=dict(
+        name='tf_efficientdet_lite2',
+        backbone_name='tf_efficientnet_lite2',
+        image_size=768,
+        fpn_channels=112,
+        fpn_cell_repeats=5,
+        box_class_repeats=3,
+        act_type='relu',
+        backbone_args=dict(drop_path_rate=0.2),
+        url='',
+    ),
+    tf_efficientdet_lite3=dict(
+        name='tf_efficientdet_lite3',
+        backbone_name='tf_efficientnet_lite3',
+        image_size=896,
+        fpn_channels=160,
+        fpn_cell_repeats=6,
+        box_class_repeats=4,
+        act_type='relu',
+        backbone_args=dict(drop_path_rate=0.2),
+        url='',
+    ),
+    tf_efficientdet_lite4=dict(
+        name='tf_efficientdet_lite4',
+        backbone_name='tf_efficientnet_lite4',
+        image_size=1024,
+        fpn_channels=224,
+        fpn_cell_repeats=7,
+        box_class_repeats=4,
+        act_type='relu',
+        backbone_args=dict(drop_path_rate=0.2),
+        url='',
     ),
 )
 

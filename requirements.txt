@@ -1,5 +1,5 @@
 torch>=1.4.0
-timm>=0.1.22
+timm>=0.1.28
 torchvision
 pycocotools
 pyyaml

@@ -43,14 +43,23 @@ parser.add_argument('-c', '--config', default='', type=str, metavar='FILE',
                     help='YAML config file specifying default arguments')
 
 
+def add_bool_arg(parser, name, default=False, help=''):  # FIXME move to utils
+    dest_name = name.replace('-', '_')
+    group = parser.add_mutually_exclusive_group(required=False)
+    group.add_argument('--' + name, dest=dest_name, action='store_true', help=help)
+    group.add_argument('--no-' + name, dest=dest_name, action='store_false', help=help)
+    parser.set_defaults(**{dest_name: default})
+
+
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 # Dataset / Model parameters
 parser.add_argument('data', metavar='DIR',
                     help='path to dataset')
 parser.add_argument('--model', default='tf_efficientdet_d1', type=str, metavar='MODEL',
                     help='Name of model to train (default: "countception"')
-parser.add_argument('--redundant-bias', action='store_true', default=False,
-                    help='include redundant bias layers if True, need True to match official TF weights')
+add_bool_arg(parser, 'redundant-bias', default=None,
+                    help='override model config for redundant bias')
+parser.set_defaults(redundant_bias=None)
 parser.add_argument('--pretrained', action='store_true', default=False,
                     help='Start with pretrained version of specified network (if avail)')
 parser.add_argument('--no-pretrained-backbone', action='store_true', default=False,
@@ -105,6 +114,10 @@ parser.add_argument('--lr-noise-pct', type=float, default=0.67, metavar='PERCENT
                     help='learning rate noise limit percent (default: 0.67)')
 parser.add_argument('--lr-noise-std', type=float, default=1.0, metavar='STDDEV',
                     help='learning rate noise std-dev (default: 1.0)')
+parser.add_argument('--lr-cycle-mul', type=float, default=1.0, metavar='MULT',
+                    help='learning rate cycle len multiplier (default: 1.0)')
+parser.add_argument('--lr-cycle-limit', type=int, default=1, metavar='N',
+                    help='learning rate cycle limit')
 parser.add_argument('--warmup-lr', type=float, default=0.0001, metavar='LR',
                     help='warmup learning rate (default: 0.0001)')
 parser.add_argument('--min-lr', type=float, default=1e-5, metavar='LR',

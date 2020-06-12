@@ -61,7 +61,8 @@ model_list = [
            model_desc='Ported from official Google AI Tensorflow weights'),
 
     ## Weights trained by myself in PyTorch
-    ## TODO
+    _entry('efficientdet_d0', 'EfficientDet-D0', '1911.09070', batch_size=_bs(112),
+           model_desc='Trained in PyTorch with https://github.com/rwightman/efficientdet-pytorch'),
 ]
 
 

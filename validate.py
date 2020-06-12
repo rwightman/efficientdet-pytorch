@@ -26,6 +26,15 @@ from pycocotools.cocoeval import COCOeval
 
 torch.backends.cudnn.benchmark = True
 
+
+def add_bool_arg(parser, name, default=False, help=''):  # FIXME move to utils
+    dest_name = name.replace('-', '_')
+    group = parser.add_mutually_exclusive_group(required=False)
+    group.add_argument('--' + name, dest=dest_name, action='store_true', help=help)
+    group.add_argument('--no-' + name, dest=dest_name, action='store_false', help=help)
+    parser.set_defaults(**{dest_name: default})
+
+
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Validation')
 parser.add_argument('data', metavar='DIR',
                     help='path to dataset')
@@ -33,8 +42,8 @@ parser.add_argument('--anno', default='val2017',
                     help='mscoco annotation set (one of val2017, train2017, test-dev2017)')
 parser.add_argument('--model', '-m', metavar='MODEL', default='tf_efficientdet_d1',
                     help='model architecture (default: tf_efficientdet_d1)')
-parser.add_argument('--no-redundant-bias', action='store_true', default=None,
-                    help='remove redundant bias layers if True, need False for official TF weights')
+add_bool_arg(parser, 'redundant-bias', default=None,
+                    help='override model config for redundant bias layers')
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
 parser.add_argument('-b', '--batch-size', default=128, type=int,
@@ -75,10 +84,6 @@ def validate(args):
     # might as well try to validate something
     args.pretrained = args.pretrained or not args.checkpoint
     args.prefetcher = not args.no_prefetcher
-    if args.no_redundant_bias is None:
-        args.redundant_bias = None
-    else:
-        args.redundant_bias = not args.no_redundant_bias
 
     # create model
     bench = create_model(
@@ -179,3 +184,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
