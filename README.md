@@ -18,6 +18,48 @@ Aside from the default model configs, there is a lot of flexibility to facilitat
 
 ## Updates / Tasks
 
+### 2020-06-04
+
+Latest results in and training goal achieved. Slightly bested the TF model mAP results for D0 model.
+This model uses:
+* typical PyTorch symmetric padding (instead of TF compatible SAME)
+* my PyTorch trained EfficientNet-B0 as the pretrained starting weights (from `timm`)
+* BiFPN/Head layers without any redundant conv/BN bias layers (slightly fewer params 3877763 vs 3880067)
+
+My latest D0 run:
+```
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.336251
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.521584
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.356439
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.123988
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.395033
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.521695
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.287121
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.441450
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.467914
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.197697
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.552515
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.689297
+```
+
+TF ported D0 weights:
+```
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.335653
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.516253
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.353884
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.125278
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.386957
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.528071
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.288049
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.439918
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.466877
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.193482
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.549262
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.686037
+```
+
+Pretrained weights added for this model `efficientdet_d0`  (Tensorflow port is `tf_efficientdet_d0`)
+
 ### 2020-05-27
 * A D0 result in, started before last improvements: `Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.331`
 * Another D0 and D1 running with the latest code.
@@ -90,6 +132,7 @@ If you are an organization is interested in sponsoring and any of this work, or 
 
 | Variant | Download | mAP (val2017) | mAP (test-dev2017) | mAP (TF official val2017) | mAP (TF official test-dev2017) |
 | --- | --- | :---: | :---: | :---: | :---: |
+| D0 | [efficientdet_d0.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/efficientdet_d0-f3276ba8.pth) | 33.6 | TBD | 33.5 | 33.8 |
 | D0 | [tf_efficientdet_d0.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d0-d92fd44f.pth) | 33.6 | TBD | 33.5 | 33.8 |
 | D1 | [tf_efficientdet_d1.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d1-4c7ebaf2.pth) | 39.3 | TBD | 39.1 | 39.6 |
 | D2 | [tf_efficientdet_d2.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d2-cb4ce77d.pth) | 42.6 | 43.1 | 42.5 | 43 |
@@ -134,6 +177,7 @@ unzip image_info_test2017.zip
 
 Run validation (val2017 by default) with D2 model: `python validation.py /localtion/of/mscoco/ --model tf_efficientdet_d2 --checkpoint tf_efficientdet_d2.pth`
 
+
 Run test-dev2017: `python validation.py /localtion/of/mscoco/ --model tf_efficientdet_d2 --checkpoint tf_efficientdet_d2.pth --anno test-dev2017`
 
 ### Run Inference
@@ -155,14 +199,45 @@ NOTE:
 * Alex Shonenkov has a clear and concise Kaggle kernel which illustrates fine-tuning these models for detecting wheat heads: https://www.kaggle.com/shonenkov/training-efficientdet
 * If you have a good example script or kernel training these models with a different dataset, feel free to notify me for inclusion here...
 
-
 ## Results
 
-### TEST-DEV2017
+### My Training
+
+#### EfficientDet-D0
+
+Latest training run with .336 for D0 (on 4x 1080ti):
+`./distributed_train.sh 4 --model efficientdet_d0 -b 22 --amp --lr .12 --sync-bn --opt fusedmomentum --warmup-epochs 5 --lr-noise 0.4 0.9 --model-ema --model-ema-decay 0.9999`
+
+These hparams above resulted in a good model, a few points:
+* the mAP peaked very early (epoch 200 of 300) and then appeared to overfit, so likely still room for improvement
+* I enabled my experimental LR noise which tends to work well with EMA enabled
+* the effective LR is a bit higher than official. Official is .08 for batch 64, this works out to .0872
+* drop_path (aka survival_prob / drop_connect) rate of 0.1, which is higher than the suggested 0.0 for D0 in official, but lower than the 0.2 for the other models
+* longer EMA period than default
+
+VAL2017
+```
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.336251
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.521584
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.356439
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.123988
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.395033
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.521695
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.287121
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.441450
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.467914
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.197697
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.552515
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.689297
+```
+
+### Ported Tensorflow weights
+
+#### TEST-DEV2017
 
 NOTE: I've only tried submitting D2 and D7 to dev server for sanity check so far
 
-#### EfficientDet-D2
+##### EfficientDet-D2
 
 ```
  Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.431
@@ -179,7 +254,7 @@ NOTE: I've only tried submitting D2 and D7 to dev server for sanity check so far
  Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.756
 ```
 
-#### EfficientDet-D7
+##### EfficientDet-D7
 ```
  Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.521
  Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.714
@@ -195,9 +270,9 @@ NOTE: I've only tried submitting D2 and D7 to dev server for sanity check so far
  Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.808
  ```
 
-### VAL2017
+#### VAL2017
 
-#### EfficientDet-D0
+##### EfficientDet-D0
 ```
  Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.336
  Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.516
@@ -213,7 +288,7 @@ NOTE: I've only tried submitting D2 and D7 to dev server for sanity check so far
  Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.686
 ```
 
-#### EfficientDet-D1
+##### EfficientDet-D1
 ```
  Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.393
  Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.583
@@ -229,7 +304,7 @@ NOTE: I've only tried submitting D2 and D7 to dev server for sanity check so far
  Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.734
 ```
 
-#### EfficientDet-D2
+##### EfficientDet-D2
 ```
  Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.426
  Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.618
@@ -245,7 +320,7 @@ NOTE: I've only tried submitting D2 and D7 to dev server for sanity check so far
  Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.748
 ```
 
-#### EfficientDet-D3
+##### EfficientDet-D3
 ```
  Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.460
  Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.651
@@ -261,7 +336,7 @@ NOTE: I've only tried submitting D2 and D7 to dev server for sanity check so far
  Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.768
 ```
 
-#### EfficientDet-D4
+##### EfficientDet-D4
  ```
  Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.491
  Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.685
@@ -277,7 +352,7 @@ NOTE: I've only tried submitting D2 and D7 to dev server for sanity check so far
  Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.780
 ```
 
-#### EfficientDet-D5
+##### EfficientDet-D5
 ```
  Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.504
  Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.700
@@ -293,7 +368,7 @@ NOTE: I've only tried submitting D2 and D7 to dev server for sanity check so far
  Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.791
 ```
 
-#### EfficientDet-D6
+##### EfficientDet-D6
 ```
  Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.512
  Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.706
@@ -309,7 +384,7 @@ NOTE: I've only tried submitting D2 and D7 to dev server for sanity check so far
  Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.794
 ```
 
-#### EfficientDet-D7
+##### EfficientDet-D7
  ```
  Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.518
  Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.711

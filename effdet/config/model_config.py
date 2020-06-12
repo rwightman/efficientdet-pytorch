@@ -72,8 +72,8 @@ efficientdet_model_param_dict = dict(
         box_class_repeats=3,
         pad_type='',
         redundant_bias=False,
-        backbone_args=dict(drop_path_rate=0.2),
-        url='',  # no pretrained weights yet
+        backbone_args=dict(drop_path_rate=0.1),
+        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/efficientdet_d0-f3276ba8.pth',
     ),
     efficientdet_d1=dict(
         name='efficientdet_d1',

@@ -61,6 +61,8 @@ parser.add_argument('--no-prefetcher', action='store_true', default=False,
                     help='disable fast prefetcher')
 parser.add_argument('--pin-mem', action='store_true', default=False,
                     help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
+parser.add_argument('--use-ema', dest='use_ema', action='store_true',
+                    help='use ema version of weights if present')
 parser.add_argument('--torchscript', dest='torchscript', action='store_true',
                     help='convert model torchscript for inference')
 parser.add_argument('--results', default='./results.json', type=str, metavar='FILENAME',
@@ -83,8 +85,9 @@ def validate(args):
         args.model,
         bench_task='predict',
         pretrained=args.pretrained,
-        checkpoint_path=args.checkpoint,
         redundant_bias=args.redundant_bias,
+        checkpoint_path=args.checkpoint,
+        checkpoint_ema=args.use_ema,
     )
     input_size = bench.config.image_size
 
