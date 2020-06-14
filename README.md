@@ -238,13 +238,6 @@ These hparams above resulted in a good model, a few points:
 * drop_path (aka survival_prob / drop_connect) rate of 0.1, which is higher than the suggested 0.0 for D0 in official, but lower than the 0.2 for the other models
 * longer EMA period than default
 
-#### EfficientDet-D1 
-
-Latest run with .394 mAP (on 4x 1080ti):
-`./distributed_train.sh 4 /mscoco --model efficientdet_d1 -b 10 --amp --lr .06 --sync-bn --opt fusedmomentum --warmup-epochs 5 --lr-noise 0.4 0.9 --model-ema --model-ema-decay 0.99995`
-
-For this run I used some improved augmentations, still experimenting so not ready for release, should work well without them but will likely start overfitting a bit sooner and possibly end up a in the .385-.39 range.
-
 VAL2017
 ```
  Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.336251
@@ -260,6 +253,14 @@ VAL2017
  Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.552515
  Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.689297
 ```
+
+#### EfficientDet-D1 
+
+Latest run with .394 mAP (on 4x 1080ti):
+`./distributed_train.sh 4 /mscoco --model efficientdet_d1 -b 10 --amp --lr .06 --sync-bn --opt fusedmomentum --warmup-epochs 5 --lr-noise 0.4 0.9 --model-ema --model-ema-decay 0.99995`
+
+For this run I used some improved augmentations, still experimenting so not ready for release, should work well without them but will likely start overfitting a bit sooner and possibly end up a in the .385-.39 range.
+
 
 ### Ported Tensorflow weights
 
