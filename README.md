@@ -31,7 +31,7 @@ EfficientDet-D1:
  Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.571316
 ```
 
-Also, [Soyeb Nagori](https://github.com/soyebn) trained an EffiCientDet-Lite0 config using this code and contributed the weights.
+Also, [Soyeb Nagori](https://github.com/soyebn) trained an EfficientDet-Lite0 config using this code and contributed the weights.
 ```
  Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.319861
  Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.500062
@@ -42,7 +42,7 @@ Also, [Soyeb Nagori](https://github.com/soyebn) trained an EffiCientDet-Lite0 co
 ```
 
 Unlike the other tf_ prefixed models this is not ported from (as of yet unreleased) TF official model, but it used
-TF ported weights for the pretrained imagenet model that was the starting point, thus it uses SAME padding. 
+TF ported weights from `timm` for the pretrained imagenet model as the backbone init, thus it uses SAME padding. 
 
 
 ### 2020-06-12
