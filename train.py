@@ -96,7 +96,7 @@ parser.add_argument('--clip-grad', type=float, default=10.0, metavar='NORM',
 # Optimizer parameters
 parser.add_argument('--opt', default='momentum', type=str, metavar='OPTIMIZER',
                     help='Optimizer (default: "momentum"')
-parser.add_argument('--opt-eps', default=1e-3, type=float, metavar='EPSILON',
+parser.add_argument('--opt-eps', default=1e-8, type=float, metavar='EPSILON',
                     help='Optimizer Epsilon (default: 1e-8)')
 parser.add_argument('--momentum', type=float, default=0.9, metavar='M',
                     help='SGD momentum (default: 0.9)')
