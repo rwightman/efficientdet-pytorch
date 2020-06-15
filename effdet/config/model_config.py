@@ -274,7 +274,7 @@ efficientdet_model_param_dict = dict(
         anchor_scale=5.0,
         fpn_name='bifpn_sum',  # Use unweighted sum for training stability.
         backbone_args=dict(drop_path_rate=0.2),
-        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d7-f05bf714.pth'
+        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d7_53-6d1d7a95.pth'
     ),
 
     # The lite configs are in TF automl repository but no weights yet and listed as 'not final'
