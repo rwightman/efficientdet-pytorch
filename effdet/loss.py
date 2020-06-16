@@ -119,6 +119,14 @@ def _box_loss(box_outputs, box_targets, num_positives, delta: float = 0.1):
     return box_loss
 
 
+def one_hot(x, num_classes: int):
+    # NOTE: PyTorch one-hot does not handle -ve entries (no hot) like Tensorflow, so mask them out
+    x_non_neg = (x >= 0).to(x.dtype)
+    onehot = torch.zeros(x.shape + (num_classes,), device=x.device, dtype=x.dtype)
+    onehot.scatter_(-1, (x * x_non_neg).unsqueeze(-1), 1)
+    return onehot * x_non_neg.unsqueeze(-1)
+
+
 class DetectionLoss(nn.Module):
     def __init__(self, config):
         super(DetectionLoss, self).__init__()
@@ -166,11 +174,7 @@ class DetectionLoss(nn.Module):
             box_targets_at_level = box_targets[l]
 
             # Onehot encoding for classification labels.
-            # NOTE: PyTorch one-hot does not handle -ve entries (no hot) like Tensorflow, so mask them out
-            cls_targets_non_neg = cls_targets_at_level >= 0
-            cls_targets_at_level_oh = F.one_hot(cls_targets_at_level * cls_targets_non_neg, self.num_classes)
-            cls_targets_at_level_oh = torch.where(
-               cls_targets_non_neg.unsqueeze(-1), cls_targets_at_level_oh, torch.zeros_like(cls_targets_at_level_oh))
+            cls_targets_at_level_oh = one_hot(cls_targets_at_level, self.num_classes)
 
             bs, height, width, _, _ = cls_targets_at_level_oh.shape
             cls_targets_at_level_oh = cls_targets_at_level_oh.view(bs, height, width, -1)
