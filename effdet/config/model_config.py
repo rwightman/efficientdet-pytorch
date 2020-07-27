@@ -6,6 +6,7 @@ TODO use a different config system (OmegaConfig -> Hydra?), separate model from 
 """
 
 from omegaconf import OmegaConf
+import itertools
 
 
 def default_detection_model_configs():
@@ -231,7 +232,7 @@ efficientdet_model_param_dict = dict(
         fpn_cell_repeats=6,
         box_class_repeats=4,
         backbone_args=dict(drop_path_rate=0.2),
-        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d3-b0ea2cbc.pth',
+        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d3_47-0b525f35.pth',
     ),
     tf_efficientdet_d4=dict(
         name='tf_efficientdet_d4',
@@ -275,6 +276,19 @@ efficientdet_model_param_dict = dict(
         fpn_name='bifpn_sum',  # Use unweighted sum for training stability.
         backbone_args=dict(drop_path_rate=0.2),
         url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d7_53-6d1d7a95.pth'
+    ),
+    tf_efficientdet_d7x=dict(
+        name='tf_efficientdet_d7x',
+        backbone_name='tf_efficientnet_b7',
+        image_size=1536,
+        fpn_channels=384,
+        fpn_cell_repeats=8,
+        box_class_repeats=5,
+        anchor_scale=4.0,
+        max_level=8,
+        fpn_name='bifpn_sum',  # Use unweighted sum for training stability.
+        backbone_args=dict(drop_path_rate=0.2),
+        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d7x-f390b87c.pth'
     ),
 
     # The lite configs are in TF automl repository but no weights yet and listed as 'not final'
@@ -343,46 +357,62 @@ def get_efficientdet_config(model_name='tf_efficientdet_d1'):
     """Get the default config for EfficientDet based on model name."""
     h = default_detection_model_configs()
     h.update(efficientdet_model_param_dict[model_name])
+    h.num_levels = h.max_level - h.min_level + 1
     return h
 
 
-def bifpn_sum_config(base_reduction=8):
-    """BiFPN config with sum."""
+def bifpn_config(min_level, max_level, weight_method=None, base_reduction=8):
+    """BiFPN config with sum.
+    Adapted from https://github.com/google/automl/blob/56815c9986ffd4b508fe1d68508e268d129715c1/efficientdet/keras/fpn_configs.py
+    """
     p = OmegaConf.create()
-    p.nodes = [
-        {'reduction': base_reduction << 3, 'inputs_offsets': [3, 4]},
-        {'reduction': base_reduction << 2, 'inputs_offsets': [2, 5]},
-        {'reduction': base_reduction << 1, 'inputs_offsets': [1, 6]},
-        {'reduction': base_reduction, 'inputs_offsets': [0, 7]},
-        {'reduction': base_reduction << 1, 'inputs_offsets': [1, 7, 8]},
-        {'reduction': base_reduction << 2, 'inputs_offsets': [2, 6, 9]},
-        {'reduction': base_reduction << 3, 'inputs_offsets': [3, 5, 10]},
-        {'reduction': base_reduction << 4, 'inputs_offsets': [4, 11]},
-    ]
-    p.weight_method = 'sum'
+    # p.nodes = [
+    #     {'reduction': base_reduction << 3, 'inputs_offsets': [3, 4]},
+    #     {'reduction': base_reduction << 2, 'inputs_offsets': [2, 5]},
+    #     {'reduction': base_reduction << 1, 'inputs_offsets': [1, 6]},
+    #     {'reduction': base_reduction, 'inputs_offsets': [0, 7]},
+    #     {'reduction': base_reduction << 1, 'inputs_offsets': [1, 7, 8]},
+    #     {'reduction': base_reduction << 2, 'inputs_offsets': [2, 6, 9]},
+    #     {'reduction': base_reduction << 3, 'inputs_offsets': [3, 5, 10]},
+    #     {'reduction': base_reduction << 4, 'inputs_offsets': [4, 11]},
+    # ]
+    # p.weight_method = 'sum'
+    #
+
+    p.weight_method = weight_method or 'fastattn'
+
+    num_levels = max_level - min_level + 1
+    node_ids = {min_level + i: [i] for i in range(num_levels)}
+
+    level_last_id = lambda level: node_ids[level][-1]
+    level_all_ids = lambda level: node_ids[level]
+    id_cnt = itertools.count(num_levels)
+
+    p.nodes = []
+    for i in range(max_level - 1, min_level - 1, -1):
+        # top-down path.
+        p.nodes.append({
+            'reduction': 1 << i,
+            'inputs_offsets': [level_last_id(i), level_last_id(i + 1)]
+        })
+        node_ids[i].append(next(id_cnt))
+
+    for i in range(min_level + 1, max_level + 1):
+        # bottom-up path.
+        p.nodes.append({
+            'reduction': 1 << i,
+            'inputs_offsets': level_all_ids(i) + [level_last_id(i - 1)]
+        })
+        node_ids[i].append(next(id_cnt))
     return p
 
 
-def bifpn_attn_config():
-    """BiFPN config with fast weighted sum."""
-    p = bifpn_sum_config()
-    p.weight_method = 'attn'
-    return p
-
-
-def bifpn_fa_config():
-    """BiFPN config with fast weighted sum."""
-    p = bifpn_sum_config()
-    p.weight_method = 'fastattn'
-    return p
-
-
-def get_fpn_config(fpn_name):
+def get_fpn_config(fpn_name, min_level=3, max_level=7):
     if not fpn_name:
         fpn_name = 'bifpn_fa'
     name_to_config = {
-        'bifpn_sum': bifpn_sum_config(),
-        'bifpn_attn': bifpn_attn_config(),
-        'bifpn_fa': bifpn_fa_config(),
+        'bifpn_sum': bifpn_config(min_level=min_level, max_level=max_level, weight_method='sum'),
+        'bifpn_attn': bifpn_config(min_level=min_level, max_level=max_level, weight_method='attn'),
+        'bifpn_fa': bifpn_config(min_level=min_level, max_level=max_level, weight_method='fastattn'),
     }
     return name_to_config[fpn_name]

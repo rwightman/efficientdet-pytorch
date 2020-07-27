@@ -250,8 +250,8 @@ class BiFpn(nn.Module):
     def __init__(self, config, feature_info, norm_layer=nn.BatchNorm2d, norm_kwargs=None, act_layer=_ACT_LAYER):
         super(BiFpn, self).__init__()
         self.config = config
-        fpn_config = config.fpn_config or get_fpn_config(config.fpn_name)
-
+        fpn_config = config.fpn_config or get_fpn_config(
+            config.fpn_name, min_level=config.min_level, max_level=config.max_level)
         self.resample = SequentialAppendLast()
         for level in range(config.num_levels):
             if level < len(feature_info):
