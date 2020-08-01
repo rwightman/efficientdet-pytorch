@@ -10,14 +10,6 @@ import numpy as np
 import pickle
 import torch
 import torch.distributed as dist
-try:
-    # bit of a hack, Windows has no group under distributed so using it as a default arg
-    # causes a failure even if distributed training isn't being used
-    import torch.distributed.group as dist_group
-except ImportError:
-    # fake the group def if it's not there
-    class dist_group(object):
-        WORLD = object()
 
 _LOCAL_PROCESS_GROUP = None
 """
@@ -96,7 +88,7 @@ def _get_global_gloo_group():
     if dist.get_backend() == "nccl":
         return dist.new_group(backend="gloo")
     else:
-        return dist_group.WORLD
+        return dist.group.WORLD
 
 
 def _serialize_to_tensor(data, group):
@@ -260,7 +252,8 @@ def reduce_dict(input_dict, average=True):
     return reduced_dict
 
 
-def all_gather_container(container, group=dist_group.WORLD):
+def all_gather_container(container, group=None):
+    group = group or dist.group.WORLD
     world_size = dist.get_world_size(group)
 
     def _do_gather(tensor):
@@ -285,7 +278,8 @@ def all_gather_container(container, group=dist_group.WORLD):
         return _do_gather(container)
 
 
-def gather_container(container, dst, group=dist_group.WORLD):
+def gather_container(container, dst, group=None):
+    group = group or dist.group.WORLD
     world_size = dist.get_world_size(group)
     this_rank = dist.get_rank(group)
 
