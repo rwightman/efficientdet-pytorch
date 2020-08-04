@@ -114,7 +114,7 @@ def _box_loss(box_outputs, box_targets, num_positives, delta: float = 0.1):
     # P3-P7 pyramid is about [0.1, 0.1, 0.2, 0.2].
     normalizer = num_positives * 4.0
     mask = box_targets != 0.0
-    box_loss = huber_loss(box_targets, box_outputs, weights=mask, delta=delta, size_average=False)
+    box_loss = huber_loss(box_outputs, box_targets, weights=mask, delta=delta, size_average=False)
     box_loss /= normalizer
     return box_loss
 

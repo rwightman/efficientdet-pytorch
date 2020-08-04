@@ -18,6 +18,10 @@ Aside from the default model configs, there is a lot of flexibility to facilitat
 
 ## Updates / Tasks
 
+### 2020-07-27
+* Add updated TF ported weights for D3 model (better training) and model def and weights for new D7X model (54.3 val mAP)
+* Fix Windows bug so it at least trains in non-distributed mode
+
 ### 2020-06-15
 Add updated D7 weights from Tensorflow impl, 53.1 validation mAP here (53.4 in TF)
 
@@ -46,7 +50,6 @@ Also, [Soyeb Nagori](https://github.com/soyebn) trained an EfficientDet-Lite0 co
 
 Unlike the other tf_ prefixed models this is not ported from (as of yet unreleased) TF official model, but it used
 TF ported weights from `timm` for the pretrained imagenet model as the backbone init, thus it uses SAME padding. 
-
 
 ### 2020-06-12
 
@@ -139,7 +142,7 @@ Initial code with working validation posted. Yes, it's a little slow, but I thin
 - [ ] Add visualization support
 - [x] Performance improvements, numpy TF detection code -> optimized PyTorch
 - [ ] Verify/fix Torchscript and ONNX export compatibility
-- [ ] Try PyTorch 1.5 w/ NHWC (channels last) order which matches TF impl
+- [ ] Try PyTorch 1.6/1.7 w/ NHWC (channels last) order which matches TF impl
 
 ### Possible Future Tasks
 - [x] Basic Training (object detection) reimplementation
@@ -162,12 +165,14 @@ If you are an organization is interested in sponsoring and any of this work, or 
 | D1 | [tf_efficientdet_d1.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d1-4c7ebaf2.pth) | 39.3 | TBD | 39.1 | 39.6 |
 | D1 | [efficientdet_d1.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/efficientdet_d1-bb7e98fe.pth) | 39.4 | 39.5 | 39.1 | 39.6 |
 | D2 | [tf_efficientdet_d2.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d2-cb4ce77d.pth) | 42.6 | 43.1 | 42.5 | 43 |
-| D3 | [tf_efficientdet_d3.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d3-b0ea2cbc.pth) | 46.0 | TBD | 45.9 | 45.8 |
+| D3 | [tf_efficientdet_d3.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d3_47-0b525f35.pth) | 47.1 | TBD | 47.2 | 47.5 |
 | D4 | [tf_efficientdet_d4.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d4-5b370b7a.pth) | 49.1 | TBD | 49.0 | 49.4 |
 | D5 | [tf_efficientdet_d5.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d5-ef44aea8.pth) | 50.4 | TBD | 50.5 | 50.7 |
 | D6 | [tf_efficientdet_d6.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d6-51cb0132.pth) | 51.2 | TBD | 51.3 | 51.7 |
 | D7 | [tf_efficientdet_d7.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d7_53-6d1d7a95.pth) | 53.1 | 53.4 | 53.4 | 53.7 |
+| D7X | [tf_efficientdet_d7x.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d7x-f390b87c.pth) | 54.3 | TBD | 54.4 | 55.1 |
 
+_NOTE: Eval for TF D3, D7, and D7X numbers above were run with soft-nms, but still using normal NMS here._
 
 ## Usage
 
@@ -355,19 +360,20 @@ NOTE: I've only tried submitting D2 and D7 to dev server for sanity check so far
 ```
 
 ##### EfficientDet-D3
+_NOTE: Official TF impl uses soft-nms for their scoring of this model, not impl here yet_
 ```
- Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.460
- Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.651
- Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.493
- Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.283
- Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.503
- Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.618
- Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.360
- Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.570
- Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.605
- Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.409
- Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.655
- Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.768
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.471223
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.661550
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.505127
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.301385
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.518339
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.626571
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.365186
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.582691
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.617252
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.424689
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.670761
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.779611
 ```
 
 ##### EfficientDet-D4
@@ -433,3 +439,20 @@ NOTE: I've only tried submitting D2 and D7 to dev server for sanity check so far
  Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.717553
  Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.806352
  ```
+
+##### EfficientDet-D7X
+_NOTE: Official TF impl uses soft-nms for their scoring of this model, not impl here yet_
+```
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.543
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.737
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.585
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.401
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.579
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.680
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.398
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.649
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.689
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.550
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.725
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.823
+```
