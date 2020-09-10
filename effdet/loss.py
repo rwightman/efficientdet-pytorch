@@ -59,7 +59,7 @@ def focal_loss(logits, targets, alpha: float, gamma: float, normalizer):
     # samples is:
     #      (1 - p_t)^r = exp(-r * z * x - r * log(1 + exp(-x))).
     neg_logits = -1.0 * logits
-    modulator = torch.exp(gamma * targets * neg_logits - gamma * torch.log1p(torch.exp(neg_logits)))
+    modulator = torch.exp(gamma * targets * neg_logits - gamma * torch.logaddexp(neg_logits, 0))
     loss = modulator * cross_entropy
     weighted_loss = torch.where(positive_label_mask, alpha * loss, (1.0 - alpha) * loss)
     weighted_loss /= normalizer
