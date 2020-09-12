@@ -35,6 +35,7 @@ class CocoDetection(data.Dataset):
         self.include_masks = False
         self.include_bboxes_ignore = False
         self.has_annotations = 'image_info' not in ann_file
+        self.is_validation_set = 'val' in ann_file
         self.coco = None
         self.cat_ids = []
         self.cat_to_label = dict()
@@ -51,7 +52,7 @@ class CocoDetection(data.Dataset):
         for img_id in sorted(self.coco.imgs.keys()):
             info = self.coco.loadImgs([img_id])[0]
             valid_annotation = not self.has_annotations or img_id in img_ids_with_ann
-            if valid_annotation and min(info['width'], info['height']) >= 32:
+            if (valid_annotation or self.is_validation_set) and min(info['width'], info['height']) >= 32:
                 self.img_ids.append(img_id)
                 self.img_infos.append(info)
             else:
