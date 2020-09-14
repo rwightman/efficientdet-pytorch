@@ -252,7 +252,8 @@ def reduce_dict(input_dict, average=True):
     return reduced_dict
 
 
-def all_gather_container(container, group=dist.group.WORLD):
+def all_gather_container(container, group=None):
+    group = group or dist.group.WORLD
     world_size = dist.get_world_size(group)
 
     def _do_gather(tensor):
@@ -277,7 +278,8 @@ def all_gather_container(container, group=dist.group.WORLD):
         return _do_gather(container)
 
 
-def gather_container(container, dst, group=dist.group.WORLD):
+def gather_container(container, dst, group=None):
+    group = group or dist.group.WORLD
     world_size = dist.get_world_size(group)
     this_rank = dist.get_rank(group)
 

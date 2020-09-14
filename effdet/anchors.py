@@ -24,13 +24,16 @@ Hacked together by Ross Wightman, original copyright below
 This module is borrowed from TPU RetinaNet implementation:
 https://github.com/tensorflow/tpu/blob/master/models/official/retinanet/anchors.py
 """
-import collections
+from typing import Optional
+
 import numpy as np
 import torch
 import torch.nn as nn
 from torchvision.ops.boxes import batched_nms, remove_small_boxes
 
 from effdet.object_detection import ArgMaxMatcher, FasterRcnnBoxCoder, BoxList, IouSimilarity, TargetAssigner
+from .soft_nms import batched_soft_nms
+
 
 # The minimum score to consider a logit for identifying detections.
 MIN_CLASS_SCORE = -5.0
@@ -167,8 +170,9 @@ def clip_boxes_xyxy(boxes: torch.Tensor, size: torch.Tensor):
 
 
 def generate_detections(
-        cls_outputs, box_outputs, anchor_boxes, indices, classes, img_scale, img_size,
-        max_det_per_image: int = MAX_DETECTIONS_PER_IMAGE):
+        cls_outputs, box_outputs, anchor_boxes, indices, classes,
+        img_scale: Optional[torch.Tensor], img_size: Optional[torch.Tensor],
+        max_det_per_image: int = MAX_DETECTIONS_PER_IMAGE, soft_nms: bool = False):
     """Generates detections with RetinaNet model outputs and anchors.
 
     Args:
@@ -198,14 +202,24 @@ def generate_detections(
         detections: detection results in a tensor with shape [MAX_DETECTION_POINTS, 6],
             each row representing [x, y, width, height, score, class]
     """
+    assert box_outputs.shape[-1] == 4
+    assert anchor_boxes.shape[-1] == 4
+    assert cls_outputs.shape[-1] == 1
+
     anchor_boxes = anchor_boxes[indices, :]
 
     # apply bounding box regression to anchors
     boxes = decode_box_outputs(box_outputs.float(), anchor_boxes, output_xyxy=True)
-    boxes = clip_boxes_xyxy(boxes, img_size / img_scale)  # clip before NMS better?
+    if img_scale is not None and img_size is not None:
+        boxes = clip_boxes_xyxy(boxes, img_size / img_scale)  # clip before NMS better?
 
     scores = cls_outputs.sigmoid().squeeze(1).float()
-    top_detection_idx = batched_nms(boxes, scores, classes, iou_threshold=0.5)
+    if soft_nms:
+        top_detection_idx, soft_scores = batched_soft_nms(
+            boxes, scores, classes, method_gaussian=True, iou_threshold=0.3, score_threshold=.001)
+        scores[top_detection_idx] = soft_scores
+    else:
+        top_detection_idx = batched_nms(boxes, scores, classes, iou_threshold=0.5)
 
     # keep only topk scoring predictions
     top_detection_idx = top_detection_idx[:max_det_per_image]
@@ -216,7 +230,8 @@ def generate_detections(
     # xyxy to xywh & rescale to original image
     boxes[:, 2] -= boxes[:, 0]
     boxes[:, 3] -= boxes[:, 1]
-    boxes *= img_scale
+    if img_scale is not None:
+        boxes *= img_scale
 
     classes += 1  # back to class idx with background class = 0
 
