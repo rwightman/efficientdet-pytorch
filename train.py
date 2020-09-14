@@ -26,7 +26,7 @@ except ImportError:
     has_apex = False
 
 from effdet import create_model, COCOEvaluator, unwrap_bench
-from data import create_loader, CocoDetection
+from data import create_loader, create_dataset
 
 from timm.models import resume_checkpoint, load_checkpoint
 from timm.utils import *
@@ -53,12 +53,13 @@ def add_bool_arg(parser, name, default=False, help=''):  # FIXME move to utils
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 # Dataset / Model parameters
-parser.add_argument('data', metavar='DIR',
+parser.add_argument('root', metavar='DIR',
                     help='path to dataset')
+parser.add_argument('--dataset', default='coco', type=str, metavar='DATASET',
+                    help='Name of model to train (default: "coco"')
 parser.add_argument('--model', default='tf_efficientdet_d1', type=str, metavar='MODEL',
-                    help='Name of model to train (default: "countception"')
-add_bool_arg(parser, 'redundant-bias', default=None,
-                    help='override model config for redundant bias')
+                    help='Name of model to train (default: "tf_efficientdet_d1"')
+add_bool_arg(parser, 'redundant-bias', default=None, help='override model config for redundant bias')
 parser.set_defaults(redundant_bias=None)
 parser.add_argument('--pretrained', action='store_true', default=False,
                     help='Start with pretrained version of specified network (if avail)')
@@ -82,14 +83,6 @@ parser.add_argument('-b', '--batch-size', type=int, default=32, metavar='N',
                     help='input batch size for training (default: 32)')
 parser.add_argument('-vb', '--validation-batch-size-multiplier', type=int, default=1, metavar='N',
                     help='ratio of validation batch size to training batch size (default: 1)')
-parser.add_argument('--drop', type=float, default=0.0, metavar='PCT',
-                    help='Dropout rate (default: 0.)')
-parser.add_argument('--drop-connect', type=float, default=None, metavar='PCT',
-                    help='Drop connect rate, DEPRECATED, use drop-path (default: None)')
-parser.add_argument('--drop-path', type=float, default=None, metavar='PCT',
-                    help='Drop path rate (default: None)')
-parser.add_argument('--drop-block', type=float, default=None, metavar='PCT',
-                    help='Drop block rate (default: None)')
 parser.add_argument('--clip-grad', type=float, default=10.0, metavar='NORM',
                     help='Clip gradient norm (default: 10.0)')
 
@@ -243,16 +236,12 @@ def main():
     model = create_model(
         args.model,
         bench_task='train',
+        #num_classes=20,
         pretrained=args.pretrained,
         pretrained_backbone=args.pretrained_backbone,
         redundant_bias=args.redundant_bias,
         checkpoint_path=args.initial_checkpoint,
     )
-    # FIXME decide which args to keep and overlay on config / pass to backbone
-    #     num_classes=args.num_classes,
-    #     drop_rate=args.drop,
-    #     drop_path_rate=args.drop_path,
-    #     drop_block_rate=args.drop_block,
     input_size = model.config.image_size
 
     if args.local_rank == 0:
@@ -329,57 +318,7 @@ def main():
     if args.local_rank == 0:
         logging.info('Scheduled epochs: {}'.format(num_epochs))
 
-    train_anno_set = 'train2017'
-    train_annotation_path = os.path.join(args.data, 'annotations', f'instances_{train_anno_set}.json')
-    train_image_dir = train_anno_set
-    dataset_train = CocoDetection(os.path.join(args.data, train_image_dir), train_annotation_path)
-
-    # FIXME cutmix/mixup worth investigating?
-    # collate_fn = None
-    # if args.prefetcher and args.mixup > 0:
-    #     collate_fn = FastCollateMixup(args.mixup, args.smoothing, args.num_classes)
-
-    loader_train = create_loader(
-        dataset_train,
-        input_size=input_size,
-        batch_size=args.batch_size,
-        is_training=True,
-        use_prefetcher=args.prefetcher,
-        #re_prob=args.reprob,  # FIXME add back various augmentations
-        #re_mode=args.remode,
-        #re_count=args.recount,
-        #re_split=args.resplit,
-        #color_jitter=args.color_jitter,
-        #auto_augment=args.aa,
-        interpolation=args.train_interpolation,
-        #mean=data_config['mean'],
-        #std=data_config['std'],
-        num_workers=args.workers,
-        distributed=args.distributed,
-        #collate_fn=collate_fn,
-        pin_mem=args.pin_mem,
-    )
-
-    train_anno_set = 'val2017'
-    train_annotation_path = os.path.join(args.data, 'annotations', f'instances_{train_anno_set}.json')
-    train_image_dir = train_anno_set
-    dataset_eval = CocoDetection(os.path.join(args.data, train_image_dir), train_annotation_path)
-
-    loader_eval = create_loader(
-        dataset_eval,
-        input_size=input_size,
-        batch_size=args.validation_batch_size_multiplier * args.batch_size,
-        is_training=False,
-        use_prefetcher=args.prefetcher,
-        interpolation=args.interpolation,
-        #mean=data_config['mean'],
-        #std=data_config['std'],
-        num_workers=args.workers,
-        #distributed=args.distributed,
-        pin_mem=args.pin_mem,
-    )
-
-    evaluator = COCOEvaluator(dataset_eval.coco, distributed=args.distributed)
+    loader_train, loader_eval, evaluator = create_datasets_and_loaders(args, input_size)
 
     eval_metric = args.eval_metric
     best_metric = None
@@ -440,6 +379,53 @@ def main():
         pass
     if best_metric is not None:
         logging.info('*** Best metric: {0} (epoch {1})'.format(best_metric, best_epoch))
+
+
+def create_datasets_and_loaders(args, input_size):
+
+    dataset_train, dataset_eval = create_dataset(args.dataset, args.root)
+
+    loader_train = create_loader(
+        dataset_train,
+        input_size=input_size,
+        batch_size=args.batch_size,
+        is_train=True,
+        use_prefetcher=args.prefetcher,
+        # re_prob=args.reprob,  # FIXME add back various augmentations
+        # re_mode=args.remode,
+        # re_count=args.recount,
+        # re_split=args.resplit,
+        # color_jitter=args.color_jitter,
+        # auto_augment=args.aa,
+        interpolation=args.train_interpolation,
+        # mean=data_config['mean'],
+        # std=data_config['std'],
+        num_workers=args.workers,
+        distributed=args.distributed,
+        # collate_fn=collate_fn,
+        pin_mem=args.pin_mem,
+    )
+
+    loader_eval = create_loader(
+        dataset_eval,
+        input_size=input_size,
+        batch_size=args.validation_batch_size_multiplier * args.batch_size,
+        is_train=False,
+        use_prefetcher=args.prefetcher,
+        interpolation=args.interpolation,
+        # mean=data_config['mean'],
+        # std=data_config['std'],
+        num_workers=args.workers,
+        distributed=args.distributed,
+        pin_mem=args.pin_mem,
+    )
+
+    if hasattr(dataset_eval.parser, 'coco'):
+        evaluator = COCOEvaluator(dataset_eval.parser.coco, distributed=args.distributed)
+    else:
+        evaluator = None
+
+    return loader_train, loader_eval, evaluator
 
 
 def train_epoch(

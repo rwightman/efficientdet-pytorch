@@ -17,7 +17,7 @@ except ImportError:
     has_amp = False
 
 from effdet import create_model
-from data import create_loader, CocoDetection
+from data import create_loader, create_dataset
 from timm.utils import AverageMeter, setup_default_logging
 
 from pycocotools.coco import COCO
@@ -109,13 +109,7 @@ def validate(args):
     if args.num_gpu > 1:
         bench = torch.nn.DataParallel(bench, device_ids=list(range(args.num_gpu)))
 
-    if 'test' in args.anno:
-        annotation_path = os.path.join(args.data, 'annotations', f'image_info_{args.anno}.json')
-        image_dir = 'test2017'
-    else:
-        annotation_path = os.path.join(args.data, 'annotations', f'instances_{args.anno}.json')
-        image_dir = args.anno
-    dataset = CocoDetection(os.path.join(args.data, image_dir), annotation_path)
+    dataset = create_dataset('coco', args.data, 'val')
 
     loader = create_loader(
         dataset,
@@ -167,8 +161,8 @@ def validate(args):
 
     json.dump(results, open(args.results, 'w'), indent=4)
     if 'test' not in args.anno:
-        coco_results = dataset.coco.loadRes(args.results)
-        coco_eval = COCOeval(dataset.coco, coco_results, 'bbox')
+        coco_results = dataset.parser.coco.loadRes(args.results)
+        coco_eval = COCOeval(dataset.parser.coco, coco_results, 'bbox')
         coco_eval.params.imgIds = img_ids  # score only ids we've used
         coco_eval.evaluate()
         coco_eval.accumulate()

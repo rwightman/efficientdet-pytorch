@@ -36,6 +36,8 @@ def default_detection_model_configs():
     # FPN and head config
     h.pad_type = 'same'  # original TF models require an equivalent of Tensorflow 'SAME' padding
     h.act_type = 'swish'
+    h.norm_layer = None  # defaults to batch norm when None
+    h.norm_kwargs = dict(eps=.001, momentum=.01)
     h.box_class_repeats = 3
     h.fpn_cell_repeats = 3
     h.fpn_channels = 88
@@ -112,9 +114,42 @@ efficientdet_model_param_dict = dict(
         backbone_args=dict(drop_path_rate=0.2),
         url='',  # no pretrained weights yet
     ),
+    efficientdet_d4=dict(
+        name='efficientdet_d4',
+        backbone_name='efficientnet_b4',
+        image_size=1024,
+        fpn_channels=224,
+        fpn_cell_repeats=7,
+        box_class_repeats=4,
+        backbone_args=dict(drop_path_rate=0.2),
+    ),
+    efficientdet_d5=dict(
+        name='efficientdet_d5',
+        backbone_name='efficientnet_b5',
+        image_size=1280,
+        fpn_channels=288,
+        fpn_cell_repeats=7,
+        box_class_repeats=4,
+        backbone_args=dict(drop_path_rate=0.2),
+        url='',
+    ),
 
     # My own experimental configs with alternate models, training TBD
     # Note: any 'timm' model in the EfficientDet family can be used as a backbone here.
+    resdet50=dict(
+        name='resdet50',  # 'wide'
+        backbone_name='resnet50',
+        image_size=640,
+        fpn_channels=88,
+        fpn_cell_repeats=4,
+        box_class_repeats=3,
+        pad_type='',
+        act_type='relu',
+        redundant_bias=False,
+        separable_conv=False,
+        backbone_args=dict(drop_path_rate=0.1),
+        url='',  # no pretrained weights yet
+    ),
     efficientdet_w0=dict(
         name='efficientdet_w0',  # 'wide'
         backbone_name='efficientnet_b0',

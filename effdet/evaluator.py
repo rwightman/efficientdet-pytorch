@@ -83,17 +83,3 @@ class COCOEvaluator(Evaluator):
             metric = metric.item()
         self.reset()
         return metric
-
-
-class FastMapEvalluator(Evaluator):
-
-    def __init__(self, distributed=False):
-        super().__init__()
-        self.distributed = distributed
-        self.predictions = []
-
-    def add_predictions(self, output, target):
-        pass
-
-    def evaluate(self):
-        pass

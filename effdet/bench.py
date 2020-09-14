@@ -60,14 +60,14 @@ def _batch_detection(batch_size: int, class_out, box_out, anchor_boxes, indices,
 
 
 class DetBenchPredict(nn.Module):
-    def __init__(self, model, config):
+    def __init__(self, model):
         super(DetBenchPredict, self).__init__()
-        self.config = config
         self.model = model
+        self.config = model.config
         self.anchors = Anchors(
-            config.min_level, config.max_level,
-            config.num_scales, config.aspect_ratios,
-            config.anchor_scale, config.image_size)
+            self.config.min_level, self.config.max_level,
+            self.config.num_scales, self.config.aspect_ratios,
+            self.config.anchor_scale, self.config.image_size)
 
     def forward(self, x, img_scales, img_size):
         class_out, box_out = self.model(x)
@@ -77,15 +77,15 @@ class DetBenchPredict(nn.Module):
 
 
 class DetBenchTrain(nn.Module):
-    def __init__(self, model, config):
+    def __init__(self, model):
         super(DetBenchTrain, self).__init__()
-        self.config = config
         self.model = model
+        self.config = model.config
         self.anchors = Anchors(
-            config.min_level, config.max_level,
-            config.num_scales, config.aspect_ratios,
-            config.anchor_scale, config.image_size)
-        self.anchor_labeler = AnchorLabeler(self.anchors, config.num_classes, match_threshold=0.5)
+            self.config.min_level, self.config.max_level,
+            self.config.num_scales, self.config.aspect_ratios,
+            self.config.anchor_scale, self.config.image_size)
+        self.anchor_labeler = AnchorLabeler(self.anchors, self.config.num_classes, match_threshold=0.5)
         self.loss_fn = DetectionLoss(self.config)
 
     def forward(self, x, target):

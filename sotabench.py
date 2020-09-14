@@ -9,7 +9,7 @@ except ImportError:
 from sotabencheval.object_detection import COCOEvaluator
 from sotabencheval.utils import is_server, extract_archive
 from effdet import create_model
-from data import CocoDetection, create_loader
+from data import DetectionDatset, create_loader
 
 NUM_GPU = 1
 BATCH_SIZE = (128 if has_amp else 64) * NUM_GPU
@@ -94,7 +94,7 @@ def eval_model(model_name, paper_model_name, paper_arxiv_id, batch_size=64, mode
         model_description=model_description,
         paper_arxiv_id=paper_arxiv_id)
 
-    dataset = CocoDetection(os.path.join(DATA_ROOT, ANNO_SET), annotation_path)
+    dataset = DetectionDatset(os.path.join(DATA_ROOT, ANNO_SET), annotation_path)
 
     loader = create_loader(
         dataset,

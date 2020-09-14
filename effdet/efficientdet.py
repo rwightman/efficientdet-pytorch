@@ -11,6 +11,7 @@ import logging
 import math
 from collections import OrderedDict
 from typing import List, Callable
+from copy import deepcopy
 
 from timm import create_model
 from timm.models.layers import create_conv2d, drop_path, create_pool2d, Swish, get_act_layer
@@ -247,8 +248,11 @@ class BiFpnLayer(nn.Module):
 
 class BiFpn(nn.Module):
 
-    def __init__(self, config, feature_info, norm_layer=nn.BatchNorm2d, norm_kwargs=None, act_layer=_ACT_LAYER):
+    def __init__(self, config, feature_info):
         super(BiFpn, self).__init__()
+        norm_layer = config.norm_layer or nn.BatchNorm2d
+        norm_kwargs = config.norm_kwargs or {}
+        act_layer = get_act_layer(config.act_layer) or _ACT_LAYER
         self.config = config
         fpn_config = config.fpn_config or get_fpn_config(
             config.fpn_name, min_level=config.min_level, max_level=config.max_level)
@@ -306,9 +310,11 @@ class BiFpn(nn.Module):
 
 
 class HeadNet(nn.Module):
-    def __init__(self, config, num_outputs, norm_layer=nn.BatchNorm2d, norm_kwargs=None, act_layer=_ACT_LAYER):
+    def __init__(self, config, num_outputs):
         super(HeadNet, self).__init__()
-        norm_kwargs = norm_kwargs or {}
+        norm_layer = config.norm_layer or nn.BatchNorm2d
+        norm_kwargs = config.norm_kwargs or {}
+        act_layer = get_act_layer(config.act_layer) or _ACT_LAYER
         self.config = config
         num_anchors = len(config.aspect_ratios) * config.num_scales
 
@@ -453,21 +459,49 @@ def get_feature_info(backbone):
 
 class EfficientDet(nn.Module):
 
-    def __init__(self, config, norm_kwargs=None, pretrained_backbone=True, alternate_init=False):
+    def __init__(self, config, pretrained_backbone=True, alternate_init=False):
         super(EfficientDet, self).__init__()
-        norm_kwargs = norm_kwargs or dict(eps=.001, momentum=.01)
+        self.config = deepcopy(config)
         self.backbone = create_model(
             config.backbone_name, features_only=True, out_indices=(2, 3, 4),
             pretrained=pretrained_backbone, **config.backbone_args)
         feature_info = get_feature_info(self.backbone)
 
-        act_layer = get_act_layer(config.act_type)
-        self.fpn = BiFpn(config, feature_info, norm_kwargs=norm_kwargs, act_layer=act_layer)
-        self.class_net = HeadNet(config, num_outputs=config.num_classes, norm_kwargs=norm_kwargs, act_layer=act_layer)
-        self.box_net = HeadNet(config, num_outputs=4, norm_kwargs=norm_kwargs, act_layer=act_layer)
+        self.fpn = BiFpn(self.config, feature_info)
+        self.class_net = HeadNet(self.config, num_outputs=self.config.num_classes)
+        self.box_net = HeadNet(self.config, num_outputs=4)
 
         for n, m in self.named_modules():
             if 'backbone' not in n:
+                if alternate_init:
+                    _init_weight_alt(m, n)
+                else:
+                    _init_weight(m, n)
+
+    def reset_head(self, num_classes=None, aspect_ratios=None, num_scales=None, alternate_init=False):
+        reset_class_head = False
+        reset_box_head = False
+        if num_classes is not None:
+            reset_class_head = True
+            self.config.num_classes = num_classes
+        if aspect_ratios is not None:
+            reset_box_head = True
+            self.config.aspect_ratios = aspect_ratios
+        if num_scales is not None:
+            reset_box_head = True
+            self.config.num_scales = num_scales
+
+        if reset_class_head:
+            self.class_net = HeadNet(self.config, num_outputs=self.config.num_classes)
+            for n, m in self.class_net.named_modules(prefix='class_net'):
+                if alternate_init:
+                    _init_weight_alt(m, n)
+                else:
+                    _init_weight(m, n)
+
+        if reset_box_head:
+            self.box_net = HeadNet(self.config, num_outputs=4)
+            for n, m in self.box_net.named_modules(prefix='box_net'):
                 if alternate_init:
                     _init_weight_alt(m, n)
                 else:

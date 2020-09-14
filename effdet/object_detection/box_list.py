@@ -18,7 +18,7 @@ BoxList represents a list of bounding boxes as tensorflow
 tensors, where each bounding box is represented as a row of 4 numbers,
 [y_min, x_min, y_max, x_max].  It is assumed that all bounding boxes
 within a given list correspond to a single image.  See also
-box_list_ops.py for common box related operations (such as area, iou, etc).
+box_list.py for common box related operations (such as area, iou, etc).
 
 Optionally, users can add additional related fields (such as weights).
 We assume the following things to be true about fields:
