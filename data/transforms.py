@@ -3,6 +3,7 @@
 Hacked together by Ross Wightman
 """
 import torch
+from torchvision import transforms as torchform
 from PIL import Image
 import numpy as np
 import random
@@ -67,6 +68,24 @@ def _size_tuple(size):
     else:
         assert len(size) == 2
         return size
+
+class ColorTransform:
+    def __init__(self, brightness=(0.2,3), contrast=(1.,2), satuation=(0.2,2.), hue=(-0.5, 0.5)) -> None:
+        self.brightness = brightness
+        self.contrast = contrast
+        self.satuation = satuation
+        self.hue = hue
+        self.img_tf = torchform.ColorJitter(brightness=self.brightness, 
+                                            contrast=self.contrast,
+                                            saturation=self.satuation,
+                                            hue=self.hue)
+    def __call__(self, img, anno):
+       
+        img = self.img_tf(img)
+        return img, anno
+
+
+
 
 
 class ResizePad:
@@ -263,6 +282,7 @@ def transforms_coco_train(
     fill_color = resolve_fill_color(fill_color, mean)
 
     image_tfl = [
+        ColorTransform(brightness=(0.7,3), contrast=(0.8, 1.5), satuation=(0.5,1.5), hue=(-0.2, 0.2)),
         RandomFlip(horizontal=True, prob=0.5),
         RandomResizePad(
             target_size=img_size, interpolation=interpolation, fill_color=fill_color),
