@@ -1,3 +1,7 @@
+""" Dataset factory
+
+Copyright 2020 Ross Wightman
+"""
 import os
 from pathlib import Path
 

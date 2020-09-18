@@ -1,5 +1,8 @@
-import os
+""" COCO, VOC, OpenImages dataset configurations
 
+Copyright 2020 Ross Wightman
+"""
+import os
 from dataclasses import dataclass, field
 from typing import Dict
 

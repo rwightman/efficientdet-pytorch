@@ -1,3 +1,7 @@
+""" Dataset parser configs
+
+Copyright 2020 Ross Wightman
+"""
 from dataclasses import dataclass
 
 __all__ = ['CocoParserCfg', 'OpenImagesParserCfg', 'VocParserCfg']

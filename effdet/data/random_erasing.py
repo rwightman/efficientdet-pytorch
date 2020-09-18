@@ -1,3 +1,7 @@
+""" Multi-Scale RandomErasing
+
+Copyright 2020 Ross Wightman
+"""
 import random
 import math
 import torch

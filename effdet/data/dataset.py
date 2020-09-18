@@ -1,4 +1,4 @@
-""" COCO dataset (quick and dirty)
+""" Detection dataset
 
 Hacked together by Ross Wightman
 """
@@ -9,7 +9,7 @@ from .parsers import create_parser
 
 
 class DetectionDatset(data.Dataset):
-    """`MS Coco Detection <http://mscoco.org/dataset/#detections-challenge2016>`_ Dataset.
+    """`Object Detection Dataset. Use with parsers for COCO, VOC, and OpenImages.
     Args:
         parser (string, Parser):
         transform (callable, optional): A function/transform that  takes in an PIL image

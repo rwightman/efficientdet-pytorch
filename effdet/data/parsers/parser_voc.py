@@ -1,3 +1,7 @@
+""" Pascal VOC dataset parser
+
+Copyright 2020 Ross Wightman
+"""
 import os
 import xml.etree.ElementTree as ET
 from collections import defaultdict

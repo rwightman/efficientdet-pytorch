@@ -1,6 +1,6 @@
 """ Object detection loader/collate
 
-Hacked together by Ross Wightman
+Hacked together by / Copyright 2020 Ross Wightman
 """
 import torch.utils.data
 from .transforms import *

@@ -1,3 +1,10 @@
+""" EfficientDet Focal, Huber/Smooth L1 loss fns w/ jit support
+
+Based on loss fn in Google's automl EfficientDet repository (Apache 2.0 license).
+https://github.com/google/automl/tree/master/efficientdet
+
+Copyright 2020 Ross Wightman
+"""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

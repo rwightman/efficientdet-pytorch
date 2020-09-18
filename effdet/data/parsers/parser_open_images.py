@@ -1,3 +1,7 @@
+""" OpenImages dataset parser
+
+Copyright 2020 Ross Wightman
+"""
 import numpy as np
 import pandas as pd
 import os
