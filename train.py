@@ -14,7 +14,6 @@ import time
 import yaml
 from datetime import datetime
 
-import torch
 import torchvision.utils
 try:
     from apex import amp
@@ -26,7 +25,7 @@ except ImportError:
     has_apex = False
 
 from effdet import create_model, COCOEvaluator, unwrap_bench
-from data import create_loader, create_dataset
+from effdet.data import create_loader, create_dataset
 
 from timm.models import resume_checkpoint, load_checkpoint
 from timm.utils import *
@@ -61,6 +60,8 @@ parser.add_argument('--model', default='tf_efficientdet_d1', type=str, metavar='
                     help='Name of model to train (default: "tf_efficientdet_d1"')
 add_bool_arg(parser, 'redundant-bias', default=None, help='override model config for redundant bias')
 parser.set_defaults(redundant_bias=None)
+parser.add_argument('--num-classes', type=int, default=None, metavar='N',
+                    help='Override num_classes in model config if set. For fine-tuning from pretrained.')
 parser.add_argument('--pretrained', action='store_true', default=False,
                     help='Start with pretrained version of specified network (if avail)')
 parser.add_argument('--no-pretrained-backbone', action='store_true', default=False,
@@ -137,18 +138,16 @@ parser.add_argument('--aa', type=str, default=None, metavar='NAME',
                     help='Use AutoAugment policy. "v0" or "original". (default: None)'),
 parser.add_argument('--reprob', type=float, default=0., metavar='PCT',
                     help='Random erase prob (default: 0.)')
-parser.add_argument('--remode', type=str, default='const',
-                    help='Random erase mode (default: "const")')
+parser.add_argument('--remode', type=str, default='pixel',
+                    help='Random erase mode (default: "pixel")')
 parser.add_argument('--recount', type=int, default=1,
                     help='Random erase count (default: 1)')
-parser.add_argument('--resplit', action='store_true', default=False,
-                    help='Do not random erase first (clean) augmentation split')
 parser.add_argument('--mixup', type=float, default=0.0,
                     help='mixup alpha, mixup enabled if > 0. (default: 0.)')
 parser.add_argument('--mixup-off-epoch', default=0, type=int, metavar='N',
                     help='turn off mixup after this epoch, disabled if 0 (default: 0)')
-parser.add_argument('--smoothing', type=float, default=0.1,
-                    help='label smoothing (default: 0.1)')
+parser.add_argument('--smoothing', type=float, default=0.,
+                    help='label smoothing (default: 0.)')
 parser.add_argument('--train-interpolation', type=str, default='random',
                     help='Training interpolation (random, bilinear, bicubic default: "random")')
 parser.add_argument('--sync-bn', action='store_true',
@@ -236,7 +235,7 @@ def main():
     model = create_model(
         args.model,
         bench_task='train',
-        #num_classes=20,
+        num_classes=args.num_classes,
         pretrained=args.pretrained,
         pretrained_backbone=args.pretrained_backbone,
         redundant_bias=args.redundant_bias,
@@ -391,10 +390,9 @@ def create_datasets_and_loaders(args, input_size):
         batch_size=args.batch_size,
         is_train=True,
         use_prefetcher=args.prefetcher,
-        # re_prob=args.reprob,  # FIXME add back various augmentations
-        # re_mode=args.remode,
-        # re_count=args.recount,
-        # re_split=args.resplit,
+        re_prob=args.reprob,
+        re_mode=args.remode,
+        re_count=args.recount,
         # color_jitter=args.color_jitter,
         # auto_augment=args.aa,
         interpolation=args.train_interpolation,

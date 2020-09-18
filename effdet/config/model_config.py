@@ -56,6 +56,8 @@ def default_detection_model_configs():
     # classification loss (used by train bench)
     h.alpha = 0.25
     h.gamma = 1.5
+    h.label_smoothing = 0.
+    h.legacy_focal = False  # use legacy focal loss (no label smoothing, differences in stability / mem / throughput)
 
     # localization loss (used by train bench)
     h.delta = 0.1

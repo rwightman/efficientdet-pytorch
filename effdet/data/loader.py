@@ -115,6 +115,9 @@ def create_loader(
         batch_size,
         is_train=False,
         use_prefetcher=True,
+        re_prob=0.,
+        re_mode='pixel',
+        re_count=1,
         interpolation='bilinear',
         fill_color='mean',
         mean=IMAGENET_DEFAULT_MEAN,
@@ -167,7 +170,7 @@ def create_loader(
     )
     if use_prefetcher:
         if is_train:
-            loader = PrefetchLoader(loader, mean=mean, std=std, re_prob=0.2, re_mode='pixel', re_count=4)
+            loader = PrefetchLoader(loader, mean=mean, std=std, re_prob=re_prob, re_mode=re_mode, re_count=re_count)
         else:
             loader = PrefetchLoader(loader, mean=mean, std=std)
 

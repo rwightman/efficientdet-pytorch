@@ -20,8 +20,7 @@ class RandomErasing:
         'Random Erasing Data Augmentation' by Zhong et al.
         See https://arxiv.org/pdf/1708.04896.pdf
 
-        This variant of RandomErasing is intended to be applied to either a batch
-        or single image tensor after it has been normalized by dataset mean and std.
+        This variant of RandomErasing is tweaked for multi-scale obj detection training.
     Args:
          probability: Probability that the Random Erasing operation will be performed.
          min_area: Minimum percentage of erased area wrt input image area.

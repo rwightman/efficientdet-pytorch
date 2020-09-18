@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+__all__ = ['CocoParserCfg', 'OpenImagesParserCfg', 'VocParserCfg']
+
 
 @dataclass
 class CocoParserCfg:

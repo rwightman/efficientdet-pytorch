@@ -4,10 +4,8 @@
 Hacked together by Ross Wightman (https://github.com/rwightman)
 """
 import argparse
-import os
 import json
 import time
-import logging
 import torch
 import torch.nn.parallel
 try:
@@ -17,10 +15,9 @@ except ImportError:
     has_amp = False
 
 from effdet import create_model
-from data import create_loader, create_dataset
+from effdet.data import create_loader, create_dataset
 from timm.utils import AverageMeter, setup_default_logging
 
-from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 
 

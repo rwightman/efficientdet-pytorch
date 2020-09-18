@@ -26,7 +26,6 @@ def focal_loss_legacy(logits, targets, alpha: float, gamma: float, normalizer):
     Returns:
         loss: A float32 scalar representing normalized total loss.
     """
-
     positive_label_mask = targets == 1.0
     cross_entropy = F.binary_cross_entropy_with_logits(logits, targets.to(logits.dtype), reduction='none')
     # Below are comments/derivations for computing modulator.
@@ -170,7 +169,9 @@ def loss_fn(
         alpha: float,
         gamma: float,
         delta: float,
-        box_loss_weight: float
+        box_loss_weight: float,
+        label_smoothing: float = 0.,
+        legacy_focal: bool = False,
         ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Computes total detection loss.
     Computes total detection loss including box and class loss from all levels.
@@ -210,10 +211,15 @@ def loss_fn(
 
         bs, height, width, _, _ = cls_targets_at_level_oh.shape
         cls_targets_at_level_oh = cls_targets_at_level_oh.view(bs, height, width, -1)
-        cls_loss = focal_loss(
-            cls_outputs[l].permute(0, 2, 3, 1).float(),
-            cls_targets_at_level_oh,
-            alpha=alpha, gamma=gamma, normalizer=num_positives_sum)
+        cls_outputs_at_level = cls_outputs[l].permute(0, 2, 3, 1).float()
+        if legacy_focal:
+            cls_loss = focal_loss_legacy(
+                cls_outputs_at_level, cls_targets_at_level_oh,
+                alpha=alpha, gamma=gamma, normalizer=num_positives_sum)
+        else:
+            cls_loss = focal_loss(
+                cls_outputs_at_level, cls_targets_at_level_oh,
+                alpha=alpha, gamma=gamma, normalizer=num_positives_sum, label_smoothing=label_smoothing)
         cls_loss = cls_loss.view(bs, height, width, -1, num_classes)
         cls_loss = cls_loss * (cls_targets_at_level != -2).unsqueeze(-1)
         cls_losses.append(cls_loss.sum())
@@ -246,6 +252,8 @@ class DetectionLoss(nn.Module):
         self.gamma = config.gamma
         self.delta = config.delta
         self.box_loss_weight = config.box_loss_weight
+        self.label_smoothing = config.label_smoothing
+        self.legacy_focal = config.legacy_focal
         self.use_jit = use_jit
 
     def forward(
@@ -256,15 +264,12 @@ class DetectionLoss(nn.Module):
             box_targets: List[torch.Tensor],
             num_positives: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
 
-        # FIXME this is kinda silly, would like to assign and script the loss fun in the init but deepcopy
-        # doesn't work with ScriptedFunction/ScriptedModule members right now and deepcopy is required for
-        # ModelEma as currently impl
+        #  FIXME I'd like to assign and script the loss fun in the init but deepcopy doesn't work with
+        #  ScriptedFunction/ScriptedModule members right now and deepcopy is required for ModelEma as currently impl
+        loss_kwargs = dict(
+            num_classes=self.num_classes, alpha=self.alpha, gamma=self.gamma, delta=self.delta,
+            box_loss_weight=self.box_loss_weight, label_smoothing=self.label_smoothing, legacy_focal=self.legacy_focal)
         if self.use_jit:
-            return loss_jit(
-                cls_outputs, box_outputs, cls_targets, box_targets, num_positives, num_classes=self.num_classes,
-                alpha=self.alpha, gamma=self.gamma, delta=self.delta, box_loss_weight=self.box_loss_weight)
+            return loss_jit(cls_outputs, box_outputs, cls_targets, box_targets, num_positives, **loss_kwargs)
         else:
-            return loss_fn(
-                cls_outputs, box_outputs, cls_targets, box_targets, num_positives, num_classes=self.num_classes,
-                alpha=self.alpha, gamma=self.gamma, delta=self.delta, box_loss_weight=self.box_loss_weight)
-
+            return loss_fn(cls_outputs, box_outputs, cls_targets, box_targets, num_positives, **loss_kwargs)

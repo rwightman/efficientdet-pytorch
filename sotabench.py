@@ -9,7 +9,7 @@ except ImportError:
 from sotabencheval.object_detection import COCOEvaluator
 from sotabencheval.utils import is_server, extract_archive
 from effdet import create_model
-from data import DetectionDatset, create_loader
+from effdet.data import DetectionDatset, create_loader
 
 NUM_GPU = 1
 BATCH_SIZE = (128 if has_amp else 64) * NUM_GPU

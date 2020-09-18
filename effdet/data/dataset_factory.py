@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 from .dataset_config import *
-from .parsers.parser_config import *
+from .parsers import *
 from .dataset import DetectionDatset
 from .parsers import create_parser
 

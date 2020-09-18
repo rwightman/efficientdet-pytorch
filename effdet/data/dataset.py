@@ -5,7 +5,7 @@ Hacked together by Ross Wightman
 import torch.utils.data as data
 
 from PIL import Image
-from data.parsers import create_parser
+from .parsers import create_parser
 
 
 class DetectionDatset(data.Dataset):
