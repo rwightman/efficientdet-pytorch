@@ -86,7 +86,7 @@ class DetBenchTrain(nn.Module):
             config.num_scales, config.aspect_ratios,
             config.anchor_scale, config.image_size)
         self.anchor_labeler = AnchorLabeler(self.anchors, config.num_classes, match_threshold=0.5)
-        self.loss_fn = DetectionLoss(self.config)
+        self.loss_fn = DetectionLoss(self.config, self.anchors)
 
     def forward(self, x, target):
         class_out, box_out = self.model(x)
