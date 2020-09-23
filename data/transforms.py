@@ -77,7 +77,7 @@ class ColorTransform:
         self.hue = hue
         self.img_tf = torchform.ColorJitter(brightness=self.brightness, 
                                             contrast=self.contrast,
-                                            saturation=self.satuation,
+                                            #saturation=self.satuation,
                                             hue=self.hue)
     def __call__(self, img, anno):
        
@@ -142,7 +142,7 @@ class RandomResizePad:
         width, height = img.size
         img_scale_y = scaled_target_height / height
         img_scale_x = scaled_target_width / width
-        img_scale = min(img_scale_y, img_scale_x)
+        img_scale = max(img_scale_y, img_scale_x)
 
         # Select non-zero random offset (x, y) if scaled image is larger than target size
         scaled_h = int(height * img_scale)
@@ -282,10 +282,10 @@ def transforms_coco_train(
     fill_color = resolve_fill_color(fill_color, mean)
 
     image_tfl = [
-        ColorTransform(brightness=(0.7,3), contrast=(0.8, 1.5), satuation=(0.5,1.5), hue=(-0.2, 0.2)),
+        ColorTransform(brightness=(0.8,1.5), contrast=(0.8, 1.2), hue=(-0.1, 0.1)),
         RandomFlip(horizontal=True, prob=0.5),
         RandomResizePad(
-            target_size=img_size, interpolation=interpolation, fill_color=fill_color),
+            target_size=img_size, interpolation=interpolation, fill_color=fill_color, scale=(0.8, 3.)),
         ImageToNumpy(),
     ]
 
