@@ -25,7 +25,7 @@ def load_metadata(cfg: OpenImagesParserCfg):
 
     def _img_filename(img_id):
         # build image filenames that are relative to img_dir
-        filename = cfg.img_template % img_id
+        filename = cfg.img_filename % img_id
         if prefix_levels:
             levels = [c for c in img_id[:prefix_levels]]
             filename = os.path.join(*levels, filename)
@@ -43,10 +43,10 @@ def load_metadata(cfg: OpenImagesParserCfg):
         img_info_df = pd.read_csv(csv_file, index_col='id')
 
         print('Filter images...')
-        # Select images that have annotations, are not too small, etc.
         if select_img_ids is not None:
             img_info_df = img_info_df.loc[select_img_ids]
-        img_info_df = img_info_df[(img_info_df['width'] >= cfg.min_size) & (img_info_df['height'] >= cfg.min_size)]
+        img_info_df = img_info_df[
+            (img_info_df['width'] >= cfg.min_img_size) & (img_info_df['height'] >= cfg.min_img_size)]
 
         print('Mapping ids...')
         img_info_df['img_id'] = img_info_df.index
@@ -60,9 +60,11 @@ def load_metadata(cfg: OpenImagesParserCfg):
     if 'obj' in cfg.task and cfg.bbox_filename:
         print('Loading bbox...')
         bbox_df = pd.read_csv(cfg.bbox_filename)
-        has_anno_img_ids = sorted(bbox_df['ImageID'].unique())
 
-        _load_img_info(cfg.img_info_filename, select_img_ids=has_anno_img_ids)
+        # NOTE currently using dataset box anno ImageIDs to form valid img_ids from the larger dataset.
+        # FIXME use *imagelabels.csv or imagelabels-boxable.csv for negative examples (without box?)
+        anno_img_ids = sorted(bbox_df['ImageID'].unique())
+        _load_img_info(cfg.img_info_filename, select_img_ids=anno_img_ids)
 
         print('Process bbox...')
         bbox_df['ImageIdx'] = bbox_df['ImageID'].map(metadata['img_id_to_idx'])
@@ -84,9 +86,10 @@ def load_metadata(cfg: OpenImagesParserCfg):
         metadata['img_to_ann'] = list(zip(ri, rc))  # index, count tuples
     elif 'seg' in cfg.task and cfg.masks_filename:
         masks_df = pd.read_csv(cfg.masks_filename)
-        has_anno_img_ids = sorted(masks_df['ImageID'].unique())
 
-        _load_img_info(cfg.img_info_filename, select_img_ids=has_anno_img_ids)
+        # NOTE currently using dataset masks anno ImageIDs to form valid img_ids from the dataset
+        anno_img_ids = sorted(masks_df['ImageID'].unique())
+        _load_img_info(cfg.img_info_filename, select_img_ids=anno_img_ids)
 
         masks_df['ImageIdx'] = masks_df['ImageID'].map(metadata['img_id_to_idx'])
         masks_df.sort_values('ImageIdx', inplace=True)
@@ -119,7 +122,7 @@ class OpenImagesParser:
     def __init__(self, cfg: OpenImagesParserCfg):
         self.yxyx = cfg.bbox_yxyx
         self.has_labels = cfg.has_labels
-        self.include_masks = False # FIXME to support someday
+        self.include_masks = False  # FIXME to support someday
         self.include_bboxes_ignore = False
 
         self.cat_names = []
@@ -189,7 +192,7 @@ class OpenImagesParser:
             #     gt_masks.append(mask_img)
 
         if gt_bboxes:
-            gt_bboxes = np.array(gt_bboxes, dtype=np.float32)
+            gt_bboxes = np.array(gt_bboxes, ndmin=2, dtype=np.float32)
             gt_labels = np.array(gt_labels, dtype=np.int64)
         else:
             gt_bboxes = np.zeros((0, 4), dtype=np.float32)
@@ -197,7 +200,7 @@ class OpenImagesParser:
 
         if self.include_bboxes_ignore:
             if gt_bboxes_ignore:
-                gt_bboxes_ignore = np.array(gt_bboxes_ignore, dtype=np.float32)
+                gt_bboxes_ignore = np.array(gt_bboxes_ignore, ndmin=2, dtype=np.float32)
             else:
                 gt_bboxes_ignore = np.zeros((0, 4), dtype=np.float32)
 

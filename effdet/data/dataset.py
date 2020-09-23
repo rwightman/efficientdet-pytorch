@@ -17,10 +17,10 @@ class DetectionDatset(data.Dataset):
 
     """
 
-    def __init__(self, img_dir, parser=None, parser_kwargs=None, transform=None):
+    def __init__(self, data_dir, parser=None, parser_kwargs=None, transform=None):
         super(DetectionDatset, self).__init__()
         parser_kwargs = parser_kwargs or {}
-        self.img_dir = img_dir
+        self.data_dir = data_dir
         if isinstance(parser, str):
             self.parser = create_parser(parser, **parser_kwargs)
         else:
@@ -42,7 +42,7 @@ class DetectionDatset(data.Dataset):
             ann = self.parser.get_ann_info(index)
             target.update(ann)
 
-        img_path = self.img_dir / img_info['file_name']
+        img_path = self.data_dir / img_info['file_name']
         img = Image.open(img_path).convert('RGB')
         if self.transform is not None:
             img, target = self.transform(img, target)

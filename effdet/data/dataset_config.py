@@ -41,8 +41,7 @@ class VocCfg:
     variant: str = None
     parser: str = 'voc'
     num_classes: int = 80
-    img_template = '%s.jpg'
-    ann_template = 'Annotations/%s.xml'
+    img_filename: str = '%s.jpg'
     splits: Dict[str, dict] = None
 
 
@@ -50,8 +49,14 @@ class VocCfg:
 class Voc2007Cfg(VocCfg):
     variant: str = '2007'
     splits: Dict[str, dict] = field(default_factory=lambda: dict(
-        train=dict(split_filename='ImageSets/Main/train.txt', img_dir='JPEGImages'),
-        val=dict(split_filename='ImageSets/Main/val.txt', img_dir='JPEGImages'),
+        train=dict(
+            split_filename='VOC2007/ImageSets/Main/train.txt',
+            ann_filename='VOC2007/Annotations/%s.xml',
+            img_dir='VOC2007/JPEGImages', ),
+        val=dict(
+            split_filename='VOC2007/ImageSets/Main/val.txt',
+            ann_filename='VOC2007/Annotations/%s.xml',
+            img_dir='VOC2007/JPEGImages'),
         #test=dict(img_dir='JPEGImages')
     ))
 
@@ -60,10 +65,33 @@ class Voc2007Cfg(VocCfg):
 class Voc2012Cfg(VocCfg):
     variant: str = '2012'
     splits: Dict[str, dict] = field(default_factory=lambda: dict(
-        train=dict(split_filename='ImageSets/Main/train.txt', img_dir='JPEGImages'),
-        val=dict(split_filename='ImageSets/Main/val.txt', img_dir='JPEGImages'),
+        train=dict(
+            split_filename='VOC2012/ImageSets/Main/train.txt',
+            ann_filename='VOC2012/Annotations/%s.xml',
+            img_dir='VOC2012/JPEGImages'),
+        val=dict(
+            split_filename='VOC2012/ImageSets/Main/val.txt',
+            ann_filename='VOC2012/Annotations/%s.xml',
+            img_dir='VOC2012/JPEGImages'),
         #test=dict(img_dir='JPEGImages', split_file=None)
     ))
+
+
+@dataclass
+class Voc0712Cfg(VocCfg):
+    variant: str = '0712'
+    splits: Dict[str, dict] = field(default_factory=lambda: dict(
+        train=dict(
+            split_filename=['VOC2007/ImageSets/Main/trainval.txt', 'VOC2012/ImageSets/Main/trainval.txt'],
+            ann_filename=['VOC2007/Annotations/%s.xml', 'VOC2012/Annotations/%s.xml'],
+            img_dir=['VOC2007/JPEGImages', 'VOC2012/JPEGImages']),
+        val=dict(
+            split_filename='VOC2007/ImageSets/Main/test.txt',
+            ann_filename='VOC2007/Annotations/%s.xml',
+            img_dir='VOC2007/JPEGImages'),
+        #test=dict(img_dir='JPEGImages', split_file=None)
+    ))
+
 
 
 @dataclass
@@ -71,7 +99,7 @@ class OpenImagesCfg:
     variant: str = None
     parser: str = 'openimages'
     num_classes: int = None
-    img_template = '%s.jpg'
+    img_filename = '%s.jpg'
     splits: Dict[str, dict] = None
 
 

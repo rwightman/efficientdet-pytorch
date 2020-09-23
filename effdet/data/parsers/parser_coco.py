@@ -16,6 +16,8 @@ class CocoParser:
         self.has_labels = cfg.has_labels
         self.include_masks = cfg.include_masks
         self.include_bboxes_ignore = cfg.include_bboxes_ignore
+        self.ignore_empty_gt = self.has_labels and cfg.ignore_empty_gt
+        self.min_img_size = cfg.min_img_size
 
         self.cat_ids = []
         self.cat_to_label = dict()
@@ -37,12 +39,12 @@ class CocoParser:
         img_ids_with_ann = set(_['image_id'] for _ in self.coco.anns.values())
         for img_id in sorted(self.coco.imgs.keys()):
             info = self.coco.loadImgs([img_id])[0]
-            valid_annotation = not self.has_labels or img_id in img_ids_with_ann
-            if valid_annotation and min(info['width'], info['height']) >= 32:
-                self.img_ids.append(img_id)
-                self.img_infos.append(info)
-            else:
+            if (min(info['width'], info['height']) < self.min_img_size or
+                    (self.ignore_empty_gt and img_id not in img_ids_with_ann)):
                 self.img_ids_invalid.append(img_id)
+                continue
+            self.img_ids.append(img_id)
+            self.img_infos.append(info)
 
     def _parse_img_ann(self, img_id):
         ann_ids = self.coco.getAnnIds(imgIds=[img_id])
@@ -73,7 +75,7 @@ class CocoParser:
                 cls.append(self.cat_to_label[ann['category_id']] if self.cat_to_label else ann['category_id'])
 
         if bboxes:
-            bboxes = np.array(bboxes, dtype=np.float32)
+            bboxes = np.array(bboxes, ndmin=2, dtype=np.float32)
             cls = np.array(cls, dtype=np.int64)
         else:
             bboxes = np.zeros((0, 4), dtype=np.float32)
@@ -81,7 +83,7 @@ class CocoParser:
 
         if self.include_bboxes_ignore:
             if bboxes_ignore:
-                bboxes_ignore = np.array(bboxes_ignore, dtype=np.float32)
+                bboxes_ignore = np.array(bboxes_ignore, ndmin=2, dtype=np.float32)
             else:
                 bboxes_ignore = np.zeros((0, 4), dtype=np.float32)
 
