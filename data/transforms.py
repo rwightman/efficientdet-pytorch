@@ -126,11 +126,12 @@ class ResizePad:
 class RandomResizePad:
 
     def __init__(self, target_size: int, scale: tuple = (0.1, 2.0), interpolation: str = 'bilinear',
-                 fill_color: tuple = (0, 0, 0)):
+                 fill_color: tuple = (0, 0, 0), repeat=10):
         self.target_size = _size_tuple(target_size)
         self.scale = scale
         self.interpolation = interpolation
         self.fill_color = fill_color
+        self.repeat = repeat
 
     def _get_params(self, img):
         # Select a random scale factor.
@@ -154,27 +155,34 @@ class RandomResizePad:
         return scaled_h, scaled_w, offset_y, offset_x, img_scale
 
     def __call__(self, img, anno: dict):
-        scaled_h, scaled_w, offset_y, offset_x, img_scale = self._get_params(img)
+        
+        for i in range(self.repeat):
+            c_img = img.copy()
+            scaled_h, scaled_w, offset_y, offset_x, img_scale = self._get_params(c_img)
 
-        interp_method = _pil_interp(self.interpolation)
-        img = img.resize((scaled_w, scaled_h), interp_method)
-        right, lower = min(scaled_w, offset_x + self.target_size[1]), min(scaled_h, offset_y + self.target_size[0])
-        img = img.crop((offset_x, offset_y, right, lower))
-        new_img = Image.new("RGB", (self.target_size[1], self.target_size[0]), color=self.fill_color)
-        new_img.paste(img)
+            interp_method = _pil_interp(self.interpolation)
+            c_img = c_img.resize((scaled_w, scaled_h), interp_method)
+            right, lower = min(scaled_w, offset_x + self.target_size[1]), min(scaled_h, offset_y + self.target_size[0])
+            c_img = c_img.crop((offset_x, offset_y, right, lower))
+            new_img = Image.new("RGB", (self.target_size[1], self.target_size[0]), color=self.fill_color)
+            new_img.paste(c_img)
 
-        if 'bbox' in anno:
-            # FIXME not fully tested
-            bbox = anno['bbox'].copy()  # FIXME copy for debugger inspection, back to inplace
-            bbox[:, :4] *= img_scale
-            box_offset = np.stack([offset_y, offset_x] * 2)
-            bbox -= box_offset
-            clip_boxes_(bbox, (scaled_h, scaled_w))
-            valid_indices = (bbox[:, :2] < bbox[:, 2:4]).all(axis=1)
-            anno['bbox'] = bbox[valid_indices, :]
-            anno['cls'] = anno['cls'][valid_indices]
+            if 'bbox' in anno:
+                # FIXME not fully tested
+                bbox = anno['bbox'].copy()  # FIXME copy for debugger inspection, back to inplace
+                bbox[:, :4] *= img_scale
+                box_offset = np.stack([offset_y, offset_x] * 2)
+                bbox -= box_offset
+                clip_boxes_(bbox, (scaled_h, scaled_w))
+                valid_indices = (bbox[:, :2] < bbox[:, 2:4]).all(axis=1)
+                
+                if valid_indices.sum() == 0 and i < self.repeat - 1:
+                    continue
+                anno['bbox'] = bbox[valid_indices, :]
+                anno['cls'] = anno['cls'][valid_indices]
+                break
 
-        anno['img_scale'] = 1. / img_scale  # back to original
+            anno['img_scale'] = 1. / img_scale  # back to original
 
         return new_img, anno
 
@@ -260,8 +268,10 @@ def transforms_coco_eval(
     fill_color = resolve_fill_color(fill_color, mean)
 
     image_tfl = [
-        ResizePad(
-            target_size=img_size, interpolation=interpolation, fill_color=fill_color),
+        RandomResizePad(
+            target_size=img_size, interpolation=interpolation, fill_color=fill_color, scale=(1., 3.)),
+        #ResizePad(
+        #    target_size=img_size, interpolation=interpolation, fill_color=fill_color),
         ImageToNumpy(),
     ]
 
