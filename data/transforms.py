@@ -126,7 +126,7 @@ class ResizePad:
 class RandomResizePad:
 
     def __init__(self, target_size: int, scale: tuple = (0.1, 2.0), interpolation: str = 'bilinear',
-                 fill_color: tuple = (0, 0, 0), repeat=10):
+                 fill_color: tuple = (0, 0, 0), repeat=20):
         self.target_size = _size_tuple(target_size)
         self.scale = scale
         self.interpolation = interpolation
@@ -271,7 +271,7 @@ def transforms_coco_eval(
 
     image_tfl = [
         RandomResizePad(
-            target_size=img_size, interpolation=interpolation, fill_color=fill_color, scale=(1., 3.)),
+            target_size=img_size, interpolation=interpolation, fill_color=fill_color, scale=(1., 5.)),
         #ResizePad(
         #    target_size=img_size, interpolation=interpolation, fill_color=fill_color),
         ImageToNumpy(),
@@ -294,10 +294,10 @@ def transforms_coco_train(
     fill_color = resolve_fill_color(fill_color, mean)
 
     image_tfl = [
-        ColorTransform(brightness=(0.8,1.5), contrast=(0.8, 1.2), hue=(-0.1, 0.1)),
+        ColorTransform(brightness=(0.5,1.5), contrast=(0.8, 1.2), hue=(-0.07, 0.07)),
         RandomFlip(horizontal=True, prob=0.5),
         RandomResizePad(
-            target_size=img_size, interpolation=interpolation, fill_color=fill_color, scale=(0.8, 3.)),
+            target_size=img_size, interpolation=interpolation, fill_color=fill_color, scale=(1., 5.)),
         ImageToNumpy(),
     ]
 
