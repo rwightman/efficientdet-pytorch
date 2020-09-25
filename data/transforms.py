@@ -182,9 +182,9 @@ class RandomResizePad:
                     continue
                 anno['bbox'] = bbox[valid_indices, :]
                 anno['cls'] = anno['cls'][valid_indices]
-                break
 
             anno['img_scale'] = 1. / img_scale  # back to original
+            break
 
         return new_img, anno
 
