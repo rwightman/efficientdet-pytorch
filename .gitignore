@@ -137,3 +137,6 @@ dmypy.json
 *.gz
 
 notebook/test_imgs/
+apex/
+notebook/apex/
+output/
