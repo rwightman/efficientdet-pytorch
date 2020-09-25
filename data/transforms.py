@@ -175,6 +175,8 @@ class RandomResizePad:
                 bbox -= box_offset
                 clip_boxes_(bbox, (scaled_h, scaled_w))
                 valid_indices = (bbox[:, :2] < bbox[:, 2:4]).all(axis=1)
+                valid_indeces2 = (bbox[:, 2:4] < self.target_size[0]).all(axis=1)
+                valid_indices = valid_indices * valid_indeces2
                 
                 if valid_indices.sum() == 0 and i < self.repeat - 1:
                     continue
@@ -295,7 +297,7 @@ def transforms_coco_train(
         ColorTransform(brightness=(0.8,1.5), contrast=(0.8, 1.2), hue=(-0.1, 0.1)),
         RandomFlip(horizontal=True, prob=0.5),
         RandomResizePad(
-            target_size=img_size, interpolation=interpolation, fill_color=fill_color, scale=(0.8, 3.)),
+            target_size=img_size, interpolation=interpolation, fill_color=fill_color, scale=(0., 3.)),
         ImageToNumpy(),
     ]
 
