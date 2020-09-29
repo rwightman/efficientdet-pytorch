@@ -14,12 +14,10 @@ try:
 except ImportError:
     has_amp = False
 
-from effdet import create_model
-from effdet.data import create_loader, create_dataset
+from effdet import create_model, create_evaluator, create_dataset, create_loader
 from timm.utils import AverageMeter, setup_default_logging
 
-from pycocotools.cocoeval import COCOeval
-
+from effdet.evaluator import CocoEvaluator, PascalEvaluator
 
 torch.backends.cudnn.benchmark = True
 
@@ -33,14 +31,18 @@ def add_bool_arg(parser, name, default=False, help=''):  # FIXME move to utils
 
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Validation')
-parser.add_argument('data', metavar='DIR',
-                    help='path to dataset')
-parser.add_argument('--anno', default='val2017',
-                    help='mscoco annotation set (one of val2017, train2017, test-dev2017)')
+parser.add_argument('root', metavar='DIR',
+                    help='path to dataset root')
+parser.add_argument('--dataset', default='coco', type=str, metavar='DATASET',
+                    help='Name of dataset (default: "coco"')
+parser.add_argument('--split', default='val',
+                    help='validation split')
 parser.add_argument('--model', '-m', metavar='MODEL', default='tf_efficientdet_d1',
                     help='model architecture (default: tf_efficientdet_d1)')
 add_bool_arg(parser, 'redundant-bias', default=None,
                     help='override model config for redundant bias layers')
+parser.add_argument('--num-classes', type=int, default=None, metavar='N',
+                    help='Override num_classes in model config if set. For fine-tuning from pretrained.')
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
 parser.add_argument('-b', '--batch-size', default=128, type=int,
@@ -86,6 +88,7 @@ def validate(args):
     bench = create_model(
         args.model,
         bench_task='predict',
+        num_classes=args.num_classes,
         pretrained=args.pretrained,
         redundant_bias=args.redundant_bias,
         checkpoint_path=args.checkpoint,
@@ -106,7 +109,7 @@ def validate(args):
     if args.num_gpu > 1:
         bench = torch.nn.DataParallel(bench, device_ids=list(range(args.num_gpu)))
 
-    dataset = create_dataset('coco', args.data, 'val')
+    dataset = create_dataset(args.dataset, args.root, args.split)
 
     loader = create_loader(
         dataset,
@@ -118,54 +121,36 @@ def validate(args):
         num_workers=args.workers,
         pin_mem=args.pin_mem)
 
-    img_ids = []
-    results = []
+    evaluator = create_evaluator(args.dataset, dataset, pred_yxyx=False)
     bench.eval()
     batch_time = AverageMeter()
     end = time.time()
+    last_idx = len(loader) - 1
     with torch.no_grad():
         for i, (input, target) in enumerate(loader):
             output = bench(input, target['img_scale'], target['img_size'])
-            output = output.cpu()
-            sample_ids = target['img_id'].cpu()
-            for index, sample in enumerate(output):
-                image_id = int(sample_ids[index])
-                for det in sample:
-                    score = float(det[4])
-                    if score < .001:  # stop when below this threshold, scores in descending order
-                        break
-                    coco_det = dict(
-                        image_id=image_id,
-                        bbox=det[0:4].tolist(),
-                        score=score,
-                        category_id=int(det[5]))
-                    img_ids.append(image_id)
-                    results.append(coco_det)
+            evaluator.add_predictions(output, target)
 
             # measure elapsed time
             batch_time.update(time.time() - end)
             end = time.time()
 
-            if i % args.log_freq == 0:
+            if i % args.log_freq == 0 or i == last_idx:
                 print(
                     'Test: [{0:>4d}/{1}]  '
                     'Time: {batch_time.val:.3f}s ({batch_time.avg:.3f}s, {rate_avg:>7.2f}/s)  '
                     .format(
                         i, len(loader), batch_time=batch_time,
-                        rate_avg=input.size(0) / batch_time.avg,
-                     )
+                        rate_avg=input.size(0) / batch_time.avg)
                 )
 
-    json.dump(results, open(args.results, 'w'), indent=4)
-    if 'test' not in args.anno:
-        coco_results = dataset.parser.coco.loadRes(args.results)
-        coco_eval = COCOeval(dataset.parser.coco, coco_results, 'bbox')
-        coco_eval.params.imgIds = img_ids  # score only ids we've used
-        coco_eval.evaluate()
-        coco_eval.accumulate()
-        coco_eval.summarize()
+    mean_ap = 0.
+    if dataset.parser.has_labels:
+        mean_ap = evaluator.evaluate()
+    else:
+        evaluator.save(args.results)
 
-    return results
+    return mean_ap
 
 
 def main():

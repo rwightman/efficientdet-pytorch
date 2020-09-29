@@ -7,10 +7,11 @@ import xml.etree.ElementTree as ET
 from collections import defaultdict
 import numpy as np
 
+from .parser import Parser
 from .parser_config import VocParserCfg
 
 
-class VocParser:
+class VocParser(Parser):
 
     DEFAULT_CLASSES = (
         'aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car', 'cat', 'chair',
@@ -18,35 +19,46 @@ class VocParser:
         'sheep', 'sofa', 'train', 'tvmonitor')
 
     def __init__(self, cfg: VocParserCfg):
-        self.yxyx = cfg.bbox_yxyx
-        self.has_labels = cfg.has_labels
-        self.keep_difficult = cfg.keep_difficult
-        self.include_bboxes_ignore = False
-        self.ignore_empty_gt = self.has_labels and cfg.ignore_empty_gt
-        self.min_img_size = cfg.min_img_size
+        super().__init__(
+            bbox_yxyx=cfg.bbox_yxyx,
+            has_labels=cfg.has_labels,
+            include_masks=False,  # FIXME to support someday
+            include_bboxes_ignore=False,
+            ignore_empty_gt=cfg.has_labels and cfg.ignore_empty_gt,
+            min_img_size=cfg.min_img_size
+        )
         self.correct_bbox = 1
-
-        classes = cfg.classes or self.DEFAULT_CLASSES
-        self.cat_ids = []
-        self.cat_to_label = {cat: i + 1 for i, cat in enumerate(classes)}
-        self.img_ids = []
-        self.img_ids_invalid = []
-        self.img_infos = []
-        self.img_id_to_idx = {}
+        self.keep_difficult = cfg.keep_difficult
 
         self.anns = None
-        self._load_annotations(cfg)
+        self.img_id_to_idx = {}
+        self._load_annotations(
+            split_filename=cfg.split_filename,
+            img_filename=cfg.img_filename,
+            ann_filename=cfg.ann_filename,
+            classes=cfg.classes,
+        )
 
-    def _load_annotations(self, cfg: VocParserCfg):
+    def _load_annotations(
+            self,
+            split_filename: str,
+            img_filename: str,
+            ann_filename: str,
+            classes=None,
+    ):
+        classes = classes or self.DEFAULT_CLASSES
+        self.cat_names = list(classes)
+        self.cat_ids = self.cat_names
+        self.cat_id_to_label = {cat: i + self.label_offset for i, cat in enumerate(self.cat_ids)}
 
-        with open(cfg.split_filename) as f:
+        with open(split_filename) as f:
             ids = f.readlines()
         self.anns = []
 
         for img_idx, img_id in enumerate(ids):
             img_id = img_id.strip("\n")
-            filename = cfg.img_filename % img_id
-            xml_path = cfg.ann_filename % img_id
+            filename = img_filename % img_id
+            xml_path = ann_filename % img_id
             tree = ET.parse(xml_path)
             root = tree.getroot()
             size = root.find('size')
@@ -58,7 +70,7 @@ class VocParser:
             anns = []
             for obj_idx, obj in enumerate(root.findall('object')):
                 name = obj.find('name').text
-                label = self.cat_to_label[name]
+                label = self.cat_id_to_label[name]
                 difficult = int(obj.find('difficult').text)
                 bnd_box = obj.find('bndbox')
                 bbox = [
@@ -117,7 +129,7 @@ class VocParser:
             bboxes = np.zeros((0, 4), dtype=np.float32)
             labels = np.zeros((0, ), dtype=np.float32)
         else:
-            bboxes = np.array(bboxes, ndmin=2, dtype=np.float32) - 1
+            bboxes = np.array(bboxes, ndmin=2, dtype=np.float32) - self.correct_bbox
             labels = np.array(labels, dtype=np.float32)
 
         if self.include_bboxes_ignore:
@@ -125,7 +137,7 @@ class VocParser:
                 bboxes_ignore = np.zeros((0, 4), dtype=np.float32)
                 labels_ignore = np.zeros((0, ), dtype=np.float32)
             else:
-                bboxes_ignore = np.array(bboxes_ignore, ndmin=2, dtype=np.float32) - 1
+                bboxes_ignore = np.array(bboxes_ignore, ndmin=2, dtype=np.float32) - self.correct_bbox
                 labels_ignore = np.array(labels_ignore, dtype=np.float32)
 
         ann = dict(

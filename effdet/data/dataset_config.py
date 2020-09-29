@@ -21,8 +21,8 @@ class Coco2017Cfg(CocoCfg):
     splits: Dict[str, dict] = field(default_factory=lambda: dict(
         train=dict(ann_filename='annotations/instances_train2017.json', img_dir='train2017', has_labels=True),
         val=dict(ann_filename='annotations/instances_val2017.json', img_dir='val2017', has_labels=True),
-        test=dict(ann_filename='annotations/img_info_test2017.json', img_dir='test2017', has_labels=False),
-        testdev=dict(ann_filename='annotations/img_info_test-dev2017.json', img_dir='test2017', has_labels=False),
+        test=dict(ann_filename='annotations/image_info_test2017.json', img_dir='test2017', has_labels=False),
+        testdev=dict(ann_filename='annotations/image_info_test-dev2017.json', img_dir='test2017', has_labels=False),
     ))
 
 

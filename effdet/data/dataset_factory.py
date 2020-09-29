@@ -31,6 +31,7 @@ def create_dataset(name, root, splits=('train', 'val')):
             ann_file = root / split_cfg['ann_filename']
             parser_cfg = CocoParserCfg(
                 ann_filename=ann_file,
+                has_labels=split_cfg['has_labels']
             )
             datasets[s] = dataset_cls(
                 data_dir=root / Path(split_cfg['img_dir']),
@@ -84,7 +85,8 @@ def create_dataset(name, root, splits=('train', 'val')):
                 bbox_filename=root / split_cfg['ann_bbox'],
                 img_label_filename=root / split_cfg['ann_img_label'],
                 img_filename=dataset_cfg.img_filename,
-                prefix_levels=split_cfg['prefix_levels']
+                prefix_levels=split_cfg['prefix_levels'],
+                has_labels=split_cfg['has_labels'],
             )
             datasets[s] = dataset_cls(
                 data_dir=root / Path(split_cfg['img_dir']),

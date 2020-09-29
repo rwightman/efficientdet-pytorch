@@ -5,26 +5,22 @@ Copyright 2020 Ross Wightman
 import os
 import numpy as np
 from pycocotools.coco import COCO
-
+from .parser import Parser
 from .parser_config import CocoParserCfg
 
 
-class CocoParser:
+class CocoParser(Parser):
 
     def __init__(self, cfg: CocoParserCfg):
-        self.yxyx = cfg.bbox_yxyx
-        self.has_labels = cfg.has_labels
-        self.include_masks = cfg.include_masks
-        self.include_bboxes_ignore = cfg.include_bboxes_ignore
-        self.ignore_empty_gt = self.has_labels and cfg.ignore_empty_gt
-        self.min_img_size = cfg.min_img_size
-
-        self.cat_ids = []
-        self.cat_to_label = dict()
-        self.img_ids = []
-        self.img_ids_invalid = []
-        self.img_infos = []
-
+        super().__init__(
+            bbox_yxyx=cfg.bbox_yxyx,
+            has_labels=cfg.has_labels,
+            include_masks=cfg.include_masks,
+            include_bboxes_ignore=cfg.include_bboxes_ignore,
+            ignore_empty_gt=cfg.has_labels and cfg.ignore_empty_gt,
+            min_img_size=cfg.min_img_size
+        )
+        self.cat_ids_as_labels = True  # this is the default for original TF EfficientDet models
         self.coco = None
         self._load_annotations(cfg.ann_filename)
 
@@ -36,6 +32,9 @@ class CocoParser:
         assert self.coco is None
         self.coco = COCO(ann_file)
         self.cat_ids = self.coco.getCatIds()
+        self.cat_names = [c['name'] for c in self.coco.loadCats(ids=self.cat_ids)]
+        if not self.cat_ids_as_labels:
+            self.cat_id_to_label = {cat_id: i + self.label_offset for i, cat_id in enumerate(self.cat_ids)}
         img_ids_with_ann = set(_['image_id'] for _ in self.coco.anns.values())
         for img_id in sorted(self.coco.imgs.keys()):
             info = self.coco.loadImgs([img_id])[0]
@@ -72,7 +71,7 @@ class CocoParser:
                     bboxes_ignore.append(bbox)
             else:
                 bboxes.append(bbox)
-                cls.append(self.cat_to_label[ann['category_id']] if self.cat_to_label else ann['category_id'])
+                cls.append(self.cat_id_to_label[ann['category_id']] if self.cat_id_to_label else ann['category_id'])
 
         if bboxes:
             bboxes = np.array(bboxes, ndmin=2, dtype=np.float32)
@@ -87,7 +86,7 @@ class CocoParser:
             else:
                 bboxes_ignore = np.zeros((0, 4), dtype=np.float32)
 
-        ann = dict(img_id=img_id, bbox=bboxes, cls=cls)
+        ann = dict(bbox=bboxes, cls=cls)
 
         if self.include_bboxes_ignore:
             ann['bbox_ignore'] = bboxes_ignore

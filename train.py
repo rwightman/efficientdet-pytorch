@@ -24,8 +24,7 @@ except ImportError:
     from torch.nn.parallel import DistributedDataParallel as DDP
     has_apex = False
 
-from effdet import create_model, COCOEvaluator, unwrap_bench
-from effdet.data import create_loader, create_dataset
+from effdet import create_model, unwrap_bench, create_loader, create_dataset, create_evaluator
 
 from timm.models import resume_checkpoint, load_checkpoint
 from timm.utils import *
@@ -142,18 +141,13 @@ parser.add_argument('--remode', type=str, default='pixel',
                     help='Random erase mode (default: "pixel")')
 parser.add_argument('--recount', type=int, default=1,
                     help='Random erase count (default: 1)')
-parser.add_argument('--mixup', type=float, default=0.0,
-                    help='mixup alpha, mixup enabled if > 0. (default: 0.)')
-parser.add_argument('--mixup-off-epoch', default=0, type=int, metavar='N',
-                    help='turn off mixup after this epoch, disabled if 0 (default: 0)')
-parser.add_argument('--smoothing', type=float, default=0.,
-                    help='label smoothing (default: 0.)')
 parser.add_argument('--train-interpolation', type=str, default='random',
                     help='Training interpolation (random, bilinear, bicubic default: "random")')
-parser.add_argument('--sync-bn', action='store_true',
-                    help='Enable NVIDIA Apex or Torch synchronized BatchNorm.')
-parser.add_argument('--dist-bn', type=str, default='',
-                    help='Distribute BatchNorm stats between nodes after each epoch ("broadcast", "reduce", or "")')
+
+# loss
+parser.add_argument('--smoothing', type=float, default=None, help='override model config label smoothing')
+add_bool_arg(parser, 'jit-loss', default=None, help='override model config for torchscript jit loss fn')
+add_bool_arg(parser, 'legacy-focal', default=None, help='override model config to use legacy focal loss')
 
 # Model Exponential Moving Average
 parser.add_argument('--model-ema', action='store_true', default=False,
@@ -162,6 +156,10 @@ parser.add_argument('--model-ema-decay', type=float, default=0.9998,
                     help='decay factor for model weights moving average (default: 0.9998)')
 
 # Misc
+parser.add_argument('--sync-bn', action='store_true',
+                    help='Enable NVIDIA Apex or Torch synchronized BatchNorm.')
+parser.add_argument('--dist-bn', type=str, default='',
+                    help='Distribute BatchNorm stats between nodes after each epoch ("broadcast", "reduce", or "")')
 parser.add_argument('--seed', type=int, default=42, metavar='S',
                     help='random seed (default: 42)')
 parser.add_argument('--log-interval', type=int, default=50, metavar='N',
@@ -239,9 +237,12 @@ def main():
         pretrained=args.pretrained,
         pretrained_backbone=args.pretrained_backbone,
         redundant_bias=args.redundant_bias,
+        label_smoothing=args.smoothing,
+        legacy_focal=args.legacy_focal,
+        jit_loss=args.jit_loss,
         checkpoint_path=args.initial_checkpoint,
     )
-    input_size = model.config.image_size
+    model_cfg = model.config  # grab before we obscure with DP/DDP wrappers
 
     if args.local_rank == 0:
         logging.info('Model %s created, param count: %d' %
@@ -317,7 +318,15 @@ def main():
     if args.local_rank == 0:
         logging.info('Scheduled epochs: {}'.format(num_epochs))
 
-    loader_train, loader_eval, evaluator = create_datasets_and_loaders(args, input_size)
+    loader_train, loader_eval, evaluator = create_datasets_and_loaders(args, model_cfg.image_size)
+
+    if model_cfg.num_classes < loader_train.dataset.parser.max_label:
+        logging.error(
+            f'Model {model_cfg.num_classes} has fewer classes than dataset {loader_train.dataset.parser.max_label}.')
+        exit(1)
+    if model_cfg.num_classes > loader_train.dataset.parser.max_label:
+        logging.warning(
+            f'Model {model_cfg.num_classes} has more classes than dataset {loader_train.dataset.parser.max_label}.')
 
     eval_metric = args.eval_metric
     best_metric = None
@@ -418,10 +427,7 @@ def create_datasets_and_loaders(args, input_size):
         pin_mem=args.pin_mem,
     )
 
-    if hasattr(dataset_eval.parser, 'coco'):
-        evaluator = COCOEvaluator(dataset_eval.parser.coco, distributed=args.distributed)
-    else:
-        evaluator = None
+    evaluator = create_evaluator(args.dataset, loader_eval.dataset, distributed=args.distributed, pred_yxyx=False)
 
     return loader_train, loader_eval, evaluator
 
@@ -429,10 +435,6 @@ def create_datasets_and_loaders(args, input_size):
 def train_epoch(
         epoch, model, loader, optimizer, args,
         lr_scheduler=None, saver=None, output_dir='', use_amp=False, model_ema=None):
-
-    if args.prefetcher and args.mixup > 0 and loader.mixup_enabled:
-        if args.mixup_off_epoch and epoch >= args.mixup_off_epoch:
-            loader.mixup_enabled = False
 
     batch_time_m = AverageMeter()
     data_time_m = AverageMeter()

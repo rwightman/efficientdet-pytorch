@@ -232,7 +232,8 @@ def generate_detections(
 
     anchor_boxes = anchor_boxes[indices, :]
 
-    # apply bounding box regression to anchors
+    # Appply bounding box regression to anchors, boxes are converted to xyxy
+    # here since PyTorch NMS expects them in that form.
     boxes = decode_box_outputs(box_outputs.float(), anchor_boxes, output_xyxy=True)
     if img_scale is not None and img_size is not None:
         boxes = clip_boxes_xyxy(boxes, img_size / img_scale)  # clip before NMS better?
@@ -249,15 +250,13 @@ def generate_detections(
     top_detection_idx = top_detection_idx[:max_det_per_image]
     boxes = boxes[top_detection_idx]
     scores = scores[top_detection_idx, None]
-    classes = classes[top_detection_idx, None]
+    classes = classes[top_detection_idx, None] + 1  # back to class idx with background class = 0
 
-    # xyxy to xywh & rescale to original image
-    boxes[:, 2] -= boxes[:, 0]
-    boxes[:, 3] -= boxes[:, 1]
     if img_scale is not None:
-        boxes *= img_scale
+        boxes = boxes * img_scale
 
-    classes += 1  # back to class idx with background class = 0
+    # FIXME add option to convert boxes back to yxyx? Otherwise must be handled downstream if
+    # that is the preferred output format.
 
     # stack em and pad out to MAX_DETECTIONS_PER_IMAGE if necessary
     detections = torch.cat([boxes, scores, classes.float()], dim=1)

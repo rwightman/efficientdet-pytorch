@@ -251,7 +251,7 @@ class DetectionLoss(nn.Module):
 
     __constants__ = ['num_classes']
 
-    def __init__(self, config, use_jit=True):
+    def __init__(self, config):
         super(DetectionLoss, self).__init__()
         self.config = config
         self.num_classes = config.num_classes
@@ -261,7 +261,7 @@ class DetectionLoss(nn.Module):
         self.box_loss_weight = config.box_loss_weight
         self.label_smoothing = config.label_smoothing
         self.legacy_focal = config.legacy_focal
-        self.use_jit = use_jit
+        self.use_jit = config.jit_loss
 
     def forward(
             self,

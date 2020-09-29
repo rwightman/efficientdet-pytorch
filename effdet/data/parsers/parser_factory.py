@@ -3,8 +3,8 @@
 Copyright 2020 Ross Wightman
 """
 from .parser_coco import CocoParser
-from .parser_open_images import OpenImagesParser
 from .parser_voc import VocParser
+from .parser_open_images import OpenImagesParser
 
 
 def create_parser(name, **kwargs):

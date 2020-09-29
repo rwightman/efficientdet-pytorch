@@ -49,7 +49,8 @@ def _post_process(config, cls_outputs, box_outputs):
 
 
 @torch.jit.script
-def _batch_detection(batch_size: int, class_out, box_out, anchor_boxes, indices, classes, img_scale, img_size):
+def _batch_detection(
+        batch_size: int, class_out, box_out, anchor_boxes, indices, classes, img_scale, img_size):
     batch_detections = []
     # FIXME we may be able to do this as a batch with some tensor reshaping/indexing, PR welcome
     for i in range(batch_size):

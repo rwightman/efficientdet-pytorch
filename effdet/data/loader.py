@@ -22,32 +22,27 @@ class FastCollate:
         # FIXME this needs to be more robust
         target = dict()
         for k, v in batch[0][1].items():
-            if isinstance(v, str):
-                target[k] = [''] * batch_size
+            if isinstance(v, np.ndarray):
+                # if a numpy array, assume it relates to object instances, pad to MAX_NUM_INSTANCES
+                target_shape = (batch_size, MAX_NUM_INSTANCES)
+                if len(v.shape) > 1:
+                    target_shape = target_shape + v.shape[1:]
+                target_dtype = torch.float32
+            elif isinstance(v, (tuple, list)):
+                # if tuple or list, assume per elem
+                target_shape = (batch_size, len(v))
+                target_dtype = torch.float32 if isinstance(v[0], float) else torch.int32
             else:
-                if isinstance(v, np.ndarray):
-                    # if a numpy array, assume it relates to object instances, pad to MAX_NUM_INSTANCES
-                    target_shape = (batch_size, MAX_NUM_INSTANCES)
-                    if len(v.shape) > 1:
-                        target_shape = target_shape + v.shape[1:]
-                    target_dtype = torch.float32
-                elif isinstance(v, (tuple, list)):
-                    # if tuple or list, assume per elem
-                    target_shape = (batch_size, len(v))
-                    target_dtype = torch.float32 if isinstance(v[0], float) else torch.int32
-                else:
-                    # scalar, assume per elem
-                    target_shape = batch_size,
-                    target_dtype = torch.float32 if isinstance(v, float) else torch.int64
-                target[k] = torch.zeros(target_shape, dtype=target_dtype)
+                # scalar, assume per elem
+                target_shape = batch_size,
+                target_dtype = torch.float32 if isinstance(v, float) else torch.int64
+            target[k] = torch.zeros(target_shape, dtype=target_dtype)
 
         tensor = torch.zeros((batch_size, *batch[0][0].shape), dtype=torch.uint8)
         for i in range(batch_size):
             tensor[i] += torch.from_numpy(batch[i][0])
             for tk, tv in batch[i][1].items():
-                if isinstance(tv, str):
-                    target[tk] = tv
-                elif isinstance(tv, np.ndarray) and len(tv.shape):
+                if isinstance(tv, np.ndarray) and len(tv.shape):
                     num_elem = min(tv.shape[0], MAX_NUM_INSTANCES)
                     target[tk][i, 0:num_elem] = torch.from_numpy(tv[0:num_elem])
                 else:
@@ -107,6 +102,10 @@ class PrefetchLoader:
     @property
     def sampler(self):
         return self.loader.sampler
+
+    @property
+    def dataset(self):
+        return self.loader.dataset
 
 
 def create_loader(

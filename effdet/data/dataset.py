@@ -35,9 +35,8 @@ class DetectionDatset(data.Dataset):
         Returns:
             tuple: Tuple (image, annotations (target)).
         """
-        img_id = self.parser.img_ids[index]
         img_info = self.parser.img_infos[index]
-        target = dict(img_id=img_id, img_size=(img_info['width'], img_info['height']))
+        target = dict(img_idx=index, img_size=(img_info['width'], img_info['height']))
         if self.parser.has_labels:
             ann = self.parser.get_ann_info(index)
             target.update(ann)
