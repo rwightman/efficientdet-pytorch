@@ -3,6 +3,7 @@ import torch.distributed as dist
 import abc
 import json
 import logging
+import time
 import numpy as np
 
 from .distributed import synchronize, is_main_process, all_gather_container
@@ -35,7 +36,6 @@ class Evaluator:
                 self.distributed_device = detections.device
             synchronize()
             detections = all_gather_container(detections)
-            #target = all_gather_container(target)
             img_indices = all_gather_container(target['img_idx'])
             if not is_main_process():
                 return
@@ -123,12 +123,9 @@ class TfmEvaluator(Evaluator):
     def __init__(
             self, dataset, distributed=False, pred_yxyx=False, evaluator_cls=tfm_eval.ObjectDetectionEvaluator):
         super().__init__(distributed=distributed, pred_yxyx=pred_yxyx)
-        cats = dataset.parser.cat_dicts
-        print(cats)
-        self._evaluator = evaluator_cls(categories=cats)
+        self._evaluator = evaluator_cls(categories=dataset.parser.cat_dicts)
         self._eval_metric_name = self._evaluator._metric_names[0]
         self._dataset = dataset.parser
-        self._gt_loaded = False
 
     def reset(self):
         self._evaluator.clear()
@@ -138,14 +135,13 @@ class TfmEvaluator(Evaluator):
     def evaluate(self):
         if not self.distributed or dist.get_rank() == 0:
             for img_idx, img_dets in zip(self.img_indices, self.predictions):
-                if not self._gt_loaded:
-                    gt = self._dataset.get_ann_info(img_idx)
-                    self._evaluator.add_single_ground_truth_image_info(img_idx, gt)
+                gt = self._dataset.get_ann_info(img_idx)
+                self._evaluator.add_single_ground_truth_image_info(img_idx, gt)
 
                 bbox = img_dets[:, 0:4] if self.pred_yxyx else img_dets[:, [1, 0, 3, 2]]
                 det = dict(bbox=bbox, score=img_dets[:, 4], cls=img_dets[:, 5])
                 self._evaluator.add_single_detected_image_info(img_idx, det)
-            self._gt_loaded = True
+
             metrics = self._evaluator.evaluate()
             _logger.info('Metrics:')
             for k, v in metrics.items():
@@ -155,7 +151,10 @@ class TfmEvaluator(Evaluator):
                 dist.broadcast(torch.tensor(map_metric, device=self.distributed_device), 0)
         else:
             map_metric = torch.tensor(0, device=self.distributed_device)
-            dist.broadcast(map_metric, 0)
+            wait = dist.broadcast(map_metric, 0, async_op=True)
+            while not wait.is_completed():
+                # wait without spinning the cpu @ 100%, no need for low latency here
+                time.sleep(0.5)
             map_metric = map_metric.item()
         self.reset()
         return map_metric
@@ -176,6 +175,7 @@ class OpenImagesEvaluator(TfmEvaluator):
 
 
 def create_evaluator(name, dataset, distributed=False, pred_yxyx=False):
+    # FIXME support OpenImages Challenge2019 metric w/ image level label consideration
     if 'coco' in name:
         return CocoEvaluator(dataset, distributed=distributed, pred_yxyx=pred_yxyx)
     elif 'openimages' in name:

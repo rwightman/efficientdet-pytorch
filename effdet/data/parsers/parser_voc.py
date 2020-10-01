@@ -51,11 +51,11 @@ class VocParser(Parser):
         self.cat_ids = self.cat_names
         self.cat_id_to_label = {cat: i + self.label_offset for i, cat in enumerate(self.cat_ids)}
 
-        with open(split_filename) as f:
-            ids = f.readlines()
         self.anns = []
 
-        for img_idx, img_id in enumerate(ids):
+        with open(split_filename) as f:
+            ids = f.readlines()
+        for img_id in ids:
             img_id = img_id.strip("\n")
             filename = img_filename % img_id
             xml_path = ann_filename % img_id
@@ -85,18 +85,14 @@ class VocParser(Parser):
                 self.anns.append(anns)
                 self.img_infos.append(dict(id=img_id, file_name=filename, width=width, height=height))
                 self.img_ids.append(img_id)
-                self.img_id_to_idx[img_id] = img_idx
             else:
                 self.img_ids_invalid.append(img_id)
 
     def merge(self, other):
-        this_size = len(self.img_ids)
         assert len(self.cat_ids) == len(other.cat_ids)
         self.img_ids.extend(other.img_ids)
         self.img_infos.extend(other.img_infos)
         self.anns.extend(other.anns)
-        for id, idx in other.img_id_to_idx.items():
-            self.img_id_to_idx[id] = idx + this_size
 
     def get_ann_info(self, idx):
         return self._parse_ann_info(self.anns[idx])

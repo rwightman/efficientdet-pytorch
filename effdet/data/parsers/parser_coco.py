@@ -2,7 +2,6 @@
 
 Copyright 2020 Ross Wightman
 """
-import os
 import numpy as np
 from pycocotools.coco import COCO
 from .parser import Parser

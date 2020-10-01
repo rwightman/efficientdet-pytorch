@@ -1,16 +1,14 @@
 from numbers import Integral
+from typing import List, Union, Dict, Any
 
 
 class Parser:
     """ Parser base class.
 
+    The attributes listed below make up a public interface common to all parsers. They can be accessed directly
+    once the dataset is constructed and annotations are populated.
+
     Attributes:
-        yxyx (bool):
-        has_labels (bool):
-        include_masks (bool):
-        include_bboxes_ignore (bool):
-        ignore_empty_gt (bool):
-        min_img_size (bool)
 
         cat_names (list[str]):
             list of category (class) names, with background class at position 0.
@@ -28,13 +26,23 @@ class Parser:
     """
     def __init__(
             self,
-            bbox_yxyx=False,
-            has_labels=True,
-            include_masks=False,
-            include_bboxes_ignore=False,
-            ignore_empty_gt=False,
-            min_img_size=32,
+            bbox_yxyx: bool = False,
+            has_labels: bool = True,
+            include_masks: bool = False,
+            include_bboxes_ignore: bool = False,
+            ignore_empty_gt: bool = False,
+            min_img_size: int = 32,
     ):
+        """
+        Args:
+            yxyx (bool): output coords in yxyx format, otherwise xyxy
+            has_labels (bool): dataset has labels (for training validation, False usually for test sets)
+            include_masks (bool): include segmentation masks in target output (not supported yet for any dataset)
+            include_bboxes_ignore (bool): include ignored bbox in target output
+            ignore_empty_gt (bool): ignore images with no ground truth (no negative images)
+            min_img_size (bool): ignore images with width or height smaller than this number
+            sub_sample (int): sample every N images from the dataset
+        """
         # parser config, determines how dataset parsed and validated
         self.yxyx = bbox_yxyx
         self.has_labels = has_labels
@@ -45,14 +53,14 @@ class Parser:
         self.label_offset = 1
 
         # Category (class) metadata. Populated by _load_annotations()
-        self.cat_names = []
-        self.cat_ids = []
-        self.cat_id_to_label = dict()
+        self.cat_names: List[str] = []
+        self.cat_ids: List[Union[str, Integral]] = []
+        self.cat_id_to_label: Dict[Union[str, Integral], Integral] = dict()
 
         # Image metadata. Populated by _load_annotations()
-        self.img_ids = []
-        self.img_ids_invalid = []
-        self.img_infos = []
+        self.img_ids: List[Union[str, Integral]] = []
+        self.img_ids_invalid: List[Union[str, Integral]] = []
+        self.img_infos: List[Dict[str, Any]] = []
 
     @property
     def cat_dicts(self):

@@ -205,7 +205,7 @@ class ObjectDetectionEvaluator(DetectionEvaluator):
                 raise error if instance masks are not in groundtruth dictionary.
         """
         if image_id in self._image_ids:
-            raise ValueError('Image with id {} already added.'.format(image_id))
+            return
 
         gt_classes = gt_dict[InputDataFields.gt_classes] - self._label_id_offset
         # If the key is not present in the gt_dict or the array is empty
@@ -403,18 +403,6 @@ class OpenImagesDetectionEvaluator(ObjectDetectionEvaluator):
             metric_prefix=metric_prefix,
             group_of_weight=group_of_weight,
             evaluate_masks=evaluate_masks)
-        # self._expected_keys = set([
-        #     InputDataFields.key,
-        #     InputDataFields.gt_boxes,
-        #     InputDataFields.gt_classes,
-        #     InputDataFields.gt_group_of,
-        #     DetectionResultFields.detection_boxes,
-        #     DetectionResultFields.detection_scores,
-        #     DetectionResultFields.detection_classes,
-        # ])
-        # if evaluate_masks:
-        #     self._expected_keys.add(InputDataFields.gt_instance_masks)
-        #     self._expected_keys.add(DetectionResultFields.detection_masks)
 
     def add_single_ground_truth_image_info(self, image_id, gt_dict):
         """Adds groundtruth for a single image to be used for evaluation.
@@ -432,7 +420,7 @@ class OpenImagesDetectionEvaluator(ObjectDetectionEvaluator):
             ValueError: On adding groundtruth for an image more than once.
         """
         if image_id in self._image_ids:
-            raise ValueError('Image with id {} already added.'.format(image_id))
+            return
 
         gt_classes = (gt_dict[InputDataFields.gt_classes] - self._label_id_offset)
         # If the key is not present in the gt_dict or the array is empty
@@ -522,11 +510,6 @@ class OpenImagesChallengeEvaluator(OpenImagesDetectionEvaluator):
             metric_prefix=metrics_prefix)
 
         self._evaluatable_labels = {}
-        # Only one of the two has to be provided, but both options are given
-        # for compatibility with previous codebase.
-        self._expected_keys.update([
-            InputDataFields.gt_image_classes,
-            InputDataFields.gt_labeled_classes])
 
     def add_single_ground_truth_image_info(self, image_id, gt_dict):
         """Adds groundtruth for a single image to be used for evaluation.

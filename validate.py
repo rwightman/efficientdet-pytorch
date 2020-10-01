@@ -15,6 +15,7 @@ except ImportError:
     has_amp = False
 
 from effdet import create_model, create_evaluator, create_dataset, create_loader
+from effdet.data import resolve_input_config
 from timm.utils import AverageMeter, setup_default_logging
 
 from effdet.evaluator import CocoEvaluator, PascalEvaluator
@@ -55,7 +56,7 @@ parser.add_argument('--std', type=float,  nargs='+', default=None, metavar='STD'
                     help='Override std deviation of of dataset')
 parser.add_argument('--interpolation', default='bilinear', type=str, metavar='NAME',
                     help='Image resize interpolation type (overrides model)')
-parser.add_argument('--fill-color', default='mean', type=str, metavar='NAME',
+parser.add_argument('--fill-color', default=None, type=str, metavar='NAME',
                     help='Image augmentation fill (background) color ("mean" or int)')
 parser.add_argument('--log-freq', default=10, type=int,
                     metavar='N', help='batch logging frequency (default: 10)')
@@ -94,7 +95,7 @@ def validate(args):
         checkpoint_path=args.checkpoint,
         checkpoint_ema=args.use_ema,
     )
-    input_size = bench.config.image_size
+    model_config = bench.config
 
     param_count = sum([m.numel() for m in bench.parameters()])
     print('Model %s created, param count: %d' % (args.model, param_count))
@@ -110,14 +111,16 @@ def validate(args):
         bench = torch.nn.DataParallel(bench, device_ids=list(range(args.num_gpu)))
 
     dataset = create_dataset(args.dataset, args.root, args.split)
-
+    input_config = resolve_input_config(args, model_config)
     loader = create_loader(
         dataset,
-        input_size=input_size,
+        input_size=input_config['input_size'],
         batch_size=args.batch_size,
         use_prefetcher=args.prefetcher,
-        interpolation=args.interpolation,
-        fill_color=args.fill_color,
+        interpolation=input_config['interpolation'],
+        fill_color=input_config['fill_color'],
+        mean=input_config['mean'],
+        std=input_config['std'],
         num_workers=args.workers,
         pin_mem=args.pin_mem)
 

@@ -93,6 +93,9 @@ class OpenImagesParser(Parser):
             img_sizes, img_id_to_idx = _load_img_info(img_info_filename, select_img_ids=anno_img_ids)
 
             masks_df['ImageIdx'] = masks_df['ImageID'].map(img_id_to_idx)
+            if np.issubdtype(masks_df.ImageIdx.dtype, np.floating):
+                masks_df = masks_df.dropna(axis='rows')
+                masks_df['ImageIdx'] = masks_df.ImageIdx.astype(np.int32)
             masks_df.sort_values('ImageIdx', inplace=True)
             ann_img_idx = masks_df['ImageIdx'].values
             img_sizes = img_sizes[ann_img_idx]
@@ -121,6 +124,9 @@ class OpenImagesParser(Parser):
 
             _logger.info('Process bbox...')
             bbox_df['ImageIdx'] = bbox_df['ImageID'].map(img_id_to_idx)
+            if np.issubdtype(bbox_df.ImageIdx.dtype, np.floating):
+                bbox_df = bbox_df.dropna(axis='rows')
+                bbox_df['ImageIdx'] = bbox_df.ImageIdx.astype(np.int32)
             bbox_df.sort_values('ImageIdx', inplace=True)
             ann_img_idx = bbox_df['ImageIdx'].values
             img_sizes = img_sizes[ann_img_idx]

@@ -25,7 +25,7 @@ except ImportError:
     has_apex = False
 
 from effdet import create_model, unwrap_bench, create_loader, create_dataset, create_evaluator
-
+from effdet.data import resolve_input_config, SkipSubset
 from timm.models import resume_checkpoint, load_checkpoint
 from timm.utils import *
 from timm.optim import create_optimizer
@@ -59,6 +59,8 @@ parser.add_argument('--model', default='tf_efficientdet_d1', type=str, metavar='
                     help='Name of model to train (default: "tf_efficientdet_d1"')
 add_bool_arg(parser, 'redundant-bias', default=None, help='override model config for redundant bias')
 parser.set_defaults(redundant_bias=None)
+parser.add_argument('--val-skip', type=int, default=0, metavar='N',
+                    help='Skip every N validation samples.')
 parser.add_argument('--num-classes', type=int, default=None, metavar='N',
                     help='Override num_classes in model config if set. For fine-tuning from pretrained.')
 parser.add_argument('--pretrained', action='store_true', default=False,
@@ -77,12 +79,10 @@ parser.add_argument('--std', type=float, nargs='+', default=None, metavar='STD',
                     help='Override std deviation of of dataset')
 parser.add_argument('--interpolation', default='', type=str, metavar='NAME',
                     help='Image resize interpolation type (overrides model)')
-parser.add_argument('--fill-color', default='0', type=str, metavar='NAME',
+parser.add_argument('--fill-color', default=None, type=str, metavar='NAME',
                     help='Image augmentation fill (background) color ("mean" or int)')
 parser.add_argument('-b', '--batch-size', type=int, default=32, metavar='N',
                     help='input batch size for training (default: 32)')
-parser.add_argument('-vb', '--validation-batch-size-multiplier', type=int, default=1, metavar='N',
-                    help='ratio of validation batch size to training batch size (default: 1)')
 parser.add_argument('--clip-grad', type=float, default=10.0, metavar='NORM',
                     help='Clip gradient norm (default: 10.0)')
 
@@ -242,7 +242,7 @@ def main():
         jit_loss=args.jit_loss,
         checkpoint_path=args.initial_checkpoint,
     )
-    model_cfg = model.config  # grab before we obscure with DP/DDP wrappers
+    model_config = model.config  # grab before we obscure with DP/DDP wrappers
 
     if args.local_rank == 0:
         logging.info('Model %s created, param count: %d' %
@@ -318,15 +318,15 @@ def main():
     if args.local_rank == 0:
         logging.info('Scheduled epochs: {}'.format(num_epochs))
 
-    loader_train, loader_eval, evaluator = create_datasets_and_loaders(args, model_cfg.image_size)
+    loader_train, loader_eval, evaluator = create_datasets_and_loaders(args, model_config)
 
-    if model_cfg.num_classes < loader_train.dataset.parser.max_label:
+    if model_config.num_classes < loader_train.dataset.parser.max_label:
         logging.error(
-            f'Model {model_cfg.num_classes} has fewer classes than dataset {loader_train.dataset.parser.max_label}.')
+            f'Model {model_config.num_classes} has fewer classes than dataset {loader_train.dataset.parser.max_label}.')
         exit(1)
-    if model_cfg.num_classes > loader_train.dataset.parser.max_label:
+    if model_config.num_classes > loader_train.dataset.parser.max_label:
         logging.warning(
-            f'Model {model_cfg.num_classes} has more classes than dataset {loader_train.dataset.parser.max_label}.')
+            f'Model {model_config.num_classes} has more classes than dataset {loader_train.dataset.parser.max_label}.')
 
     eval_metric = args.eval_metric
     best_metric = None
@@ -389,13 +389,14 @@ def main():
         logging.info('*** Best metric: {0} (epoch {1})'.format(best_metric, best_epoch))
 
 
-def create_datasets_and_loaders(args, input_size):
+def create_datasets_and_loaders(args, model_config):
+    input_config = resolve_input_config(args, model_config=model_config)
 
     dataset_train, dataset_eval = create_dataset(args.dataset, args.root)
 
     loader_train = create_loader(
         dataset_train,
-        input_size=input_size,
+        input_size=input_config['input_size'],
         batch_size=args.batch_size,
         is_train=True,
         use_prefetcher=args.prefetcher,
@@ -404,24 +405,27 @@ def create_datasets_and_loaders(args, input_size):
         re_count=args.recount,
         # color_jitter=args.color_jitter,
         # auto_augment=args.aa,
-        interpolation=args.train_interpolation,
-        # mean=data_config['mean'],
-        # std=data_config['std'],
+        interpolation=args.train_interpolation or input_config['interpolation'],
+        fill_color=input_config['fill_color'],
+        mean=input_config['mean'],
+        std=input_config['std'],
         num_workers=args.workers,
         distributed=args.distributed,
-        # collate_fn=collate_fn,
         pin_mem=args.pin_mem,
     )
 
+    if args.val_skip > 1:
+        dataset_eval = SkipSubset(dataset_eval, args.val_skip)
     loader_eval = create_loader(
         dataset_eval,
-        input_size=input_size,
-        batch_size=args.validation_batch_size_multiplier * args.batch_size,
+        input_size=input_config['input_size'],
+        batch_size=args.batch_size,
         is_train=False,
         use_prefetcher=args.prefetcher,
-        interpolation=args.interpolation,
-        # mean=data_config['mean'],
-        # std=data_config['std'],
+        interpolation=input_config['interpolation'],
+        fill_color=input_config['fill_color'],
+        mean=input_config['mean'],
+        std=input_config['std'],
         num_workers=args.workers,
         distributed=args.distributed,
         pin_mem=args.pin_mem,

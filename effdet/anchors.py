@@ -171,28 +171,6 @@ def clip_boxes_xyxy(boxes: torch.Tensor, size: torch.Tensor):
     return boxes
 
 
-# def batched_nms(
-#     boxes: torch.Tensor, scores: torch.Tensor, idxs: torch.Tensor, iou_threshold: float
-# ):
-#     """
-#     Same as torchvision.ops.boxes.batched_nms, but safer.
-#     """
-#     assert boxes.shape[-1] == 4
-#     # TODO may need better strategy.
-#     # Investigate after having a fully-cuda NMS op.
-#     if len(boxes) < 40000:
-#         return tvb.batched_nms(boxes, scores, idxs, iou_threshold)
-#
-#     result_mask = scores.new_zeros(scores.size(), dtype=torch.bool)
-#     for id in torch.jit.annotate(List[int], torch.unique(idxs).cpu().tolist()):
-#         mask = (idxs == id).nonzero().view(-1)
-#         keep = tvb.nms(boxes[mask], scores[mask], iou_threshold)
-#         result_mask[mask[keep]] = True
-#     keep = result_mask.nonzero().view(-1)
-#     keep = keep[scores[keep].argsort(descending=True)]
-#     return keep
-
-
 def generate_detections(
         cls_outputs, box_outputs, anchor_boxes, indices, classes,
         img_scale: Optional[torch.Tensor], img_size: Optional[torch.Tensor],
@@ -432,10 +410,9 @@ class AnchorLabeler(object):
             # cls_weights, box_weights are not used
             cls_targets, _, box_targets, _, matches = self.target_assigner.assign(
                 anchor_box_list, BoxList(gt_boxes[i]), gt_classes[i])
-            #print(gt_boxes[i].shape, gt_classes[i].shape, matches.match_results.shape)
+
             # class labels start from 1 and the background class = -1
-            cls_targets -= 1
-            cls_targets = cls_targets.long()
+            cls_targets = (cls_targets - 1).long()
 
             # Unpack labels.
             """Unpacks an array of cls/box into multiple scales."""
