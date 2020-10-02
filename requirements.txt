@@ -1,14 +1,14 @@
 torch>=1.4.0
-timm>=0.1.28
+timm>=0.2.2
 torchvision
-pycocotools
 pyyaml
+numpy
+
+# an update version that fixes some bugs, incl issues with numpy >= 1.18
+pycocotools>=2.0.2
 
 # better to manually install pillow-simd
 Pillow
-
-# conflict between pycocotools and numpy 1.18.+
-numpy<=1.17.5
 
 # pycocotools needs this but doesn't have dep
 matplotlib

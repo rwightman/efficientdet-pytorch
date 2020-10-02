@@ -3,7 +3,6 @@
 Copyright 2020 Ross Wightman
 """
 import numpy as np
-import pandas as pd
 import os
 import logging
 
@@ -44,6 +43,8 @@ class OpenImagesParser(Parser):
             masks_filename: str,
             bbox_filename: str,
     ):
+        import pandas as pd  # For now, blow up on pandas req only when trying to load open images anno
+
         _logger.info('Loading categories...')
         classes_df = pd.read_csv(categories_filename, header=None)
         self.cat_ids = classes_df[0].tolist()
