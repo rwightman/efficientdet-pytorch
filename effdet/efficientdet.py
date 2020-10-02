@@ -252,7 +252,7 @@ class BiFpn(nn.Module):
         super(BiFpn, self).__init__()
         norm_layer = config.norm_layer or nn.BatchNorm2d
         norm_kwargs = config.norm_kwargs or {}
-        act_layer = get_act_layer(config.act_layer) or _ACT_LAYER
+        act_layer = get_act_layer(config.act_type) or _ACT_LAYER
         self.config = config
         fpn_config = config.fpn_config or get_fpn_config(
             config.fpn_name, min_level=config.min_level, max_level=config.max_level)
@@ -314,7 +314,7 @@ class HeadNet(nn.Module):
         super(HeadNet, self).__init__()
         norm_layer = config.norm_layer or nn.BatchNorm2d
         norm_kwargs = config.norm_kwargs or {}
-        act_layer = get_act_layer(config.act_layer) or _ACT_LAYER
+        act_layer = get_act_layer(config.act_type) or _ACT_LAYER
         self.config = config
         num_anchors = len(config.aspect_ratios) * config.num_scales
 

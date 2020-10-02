@@ -140,7 +140,7 @@ efficientdet_model_param_dict = dict(
     # My own experimental configs with alternate models, training TBD
     # Note: any 'timm' model in the EfficientDet family can be used as a backbone here.
     resdet50=dict(
-        name='resdet50',  # 'wide'
+        name='resdet50',
         backbone_name='resnet50',
         image_size=640,
         fpn_channels=88,
@@ -150,8 +150,50 @@ efficientdet_model_param_dict = dict(
         act_type='relu',
         redundant_bias=False,
         separable_conv=False,
-        backbone_args=dict(drop_path_rate=0.1),
-        url='',  # no pretrained weights yet
+        backbone_args=dict(drop_path_rate=0.2),
+        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/resdet50_416-08676892.pth',
+    ),
+    cspresdet50=dict(
+        name='cspresdet50',
+        backbone_name='cspresnet50',
+        image_size=640,
+        fpn_channels=88,
+        fpn_cell_repeats=4,
+        box_class_repeats=3,
+        pad_type='',
+        act_type='leaky_relu',
+        redundant_bias=False,
+        separable_conv=False,
+        backbone_args=dict(drop_path_rate=0.2),
+        url='',
+    ),
+    cspresdext50=dict(
+        name='cspresdext50',
+        backbone_name='cspresnext50',
+        image_size=640,
+        fpn_channels=88,
+        fpn_cell_repeats=4,
+        box_class_repeats=3,
+        pad_type='',
+        act_type='leaky_relu',
+        redundant_bias=False,
+        separable_conv=False,
+        backbone_args=dict(drop_path_rate=0.2),
+        url='',
+    ),
+    cspdarkdet53=dict(
+        name='cspdarkdet53',
+        backbone_name='cspdarknet53',
+        image_size=640,
+        fpn_channels=88,
+        fpn_cell_repeats=4,
+        box_class_repeats=3,
+        pad_type='',
+        act_type='leaky_relu',
+        redundant_bias=False,
+        separable_conv=False,
+        backbone_args=dict(drop_path_rate=0.2),
+        url='',
     ),
     efficientdet_w0=dict(
         name='efficientdet_w0',  # 'wide'

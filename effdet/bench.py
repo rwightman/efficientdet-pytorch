@@ -2,6 +2,7 @@
 
 Hacked together by Ross Wightman
 """
+from typing import Optional, Dict
 import torch
 import torch.nn as nn
 from timm.utils import ModelEma
@@ -50,12 +51,15 @@ def _post_process(config, cls_outputs, box_outputs):
 
 @torch.jit.script
 def _batch_detection(
-        batch_size: int, class_out, box_out, anchor_boxes, indices, classes, img_scale, img_size):
+        batch_size: int, class_out, box_out, anchor_boxes, indices, classes,
+        img_scale: Optional[torch.Tensor] = None, img_size: Optional[torch.Tensor] = None):
     batch_detections = []
     # FIXME we may be able to do this as a batch with some tensor reshaping/indexing, PR welcome
     for i in range(batch_size):
+        img_scale_i = None if img_scale is None else img_scale[i]
+        img_size_i = None if img_size is None else img_size[i]
         detections = generate_detections(
-            class_out[i], box_out[i], anchor_boxes, indices[i], classes[i], img_scale[i], img_size[i])
+            class_out[i], box_out[i], anchor_boxes, indices[i], classes[i], img_scale_i, img_size_i)
         batch_detections.append(detections)
     return torch.stack(batch_detections, dim=0)
 
@@ -70,11 +74,14 @@ class DetBenchPredict(nn.Module):
             self.config.num_scales, self.config.aspect_ratios,
             self.config.anchor_scale, self.config.image_size)
 
-    def forward(self, x, img_scales, img_size):
+    def forward(self, x, img_info: Dict[str, torch.Tensor] = None):
         class_out, box_out = self.model(x)
         class_out, box_out, indices, classes = _post_process(self.config, class_out, box_out)
+        img_info = img_info or {}
+        img_scale = img_info['img_scale'] if 'img_scale' in img_info else None
+        img_size = img_info['img_size'] if 'img_size' in img_info else None
         return _batch_detection(
-            x.shape[0], class_out, box_out, self.anchors.boxes, indices, classes, img_scales, img_size)
+            x.shape[0], class_out, box_out, self.anchors.boxes, indices, classes, img_scale, img_size)
 
 
 class DetBenchTrain(nn.Module):
@@ -89,7 +96,7 @@ class DetBenchTrain(nn.Module):
         self.anchor_labeler = AnchorLabeler(self.anchors, self.config.num_classes, match_threshold=0.5)
         self.loss_fn = DetectionLoss(self.config)
 
-    def forward(self, x, target):
+    def forward(self, x, target: Dict[str, torch.Tensor]):
         class_out, box_out = self.model(x)
         cls_targets, box_targets, num_positives = self.anchor_labeler.batch_label_anchors(
             x.shape[0], target['bbox'], target['cls'])

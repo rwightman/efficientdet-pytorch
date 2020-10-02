@@ -11,48 +11,54 @@ from timm.data.distributed_sampler import OrderedDistributedSampler
 MAX_NUM_INSTANCES = 100
 
 
-class FastCollate:
+class DetectionFastCollate:
 
-    def __init__(self):
-        pass
+    def __init__(self, instance_keys=None, instance_shapes=None, instance_fill=-1, max_instances=MAX_NUM_INSTANCES):
+        instance_keys = instance_keys or {'bbox', 'bbox_ignore', 'cls'}
+        instance_shapes = instance_shapes or dict(
+            bbox=(max_instances, 4), bbox_ignore=(max_instances, 4), cls=(max_instances,))
+        self.instance_info = {k: dict(fill=instance_fill, shape=instance_shapes[k]) for k in instance_keys}
+        self.max_instances = max_instances
 
     def __call__(self, batch):
         batch_size = len(batch)
-
-        # FIXME this needs to be more robust
         target = dict()
-        for k, v in batch[0][1].items():
-            if isinstance(v, np.ndarray):
-                # if a numpy array, assume it relates to object instances, pad to MAX_NUM_INSTANCES
-                target_shape = (batch_size, MAX_NUM_INSTANCES)
-                if len(v.shape) > 1:
-                    target_shape = target_shape + v.shape[1:]
-                target_dtype = torch.float32
+
+        def _get_target(k, v):
+            if k in target:
+                return target[k], k in self.instance_info
+            is_instance = False
+            fill_value = 0
+            if k in self.instance_info:
+                info = self.instance_info[k]
+                is_instance = True
+                fill_value = info['fill']
+                shape = (batch_size,) + info['shape']
+                dtype = torch.float32
             elif isinstance(v, (tuple, list)):
-                # if tuple or list, assume per elem
-                target_shape = (batch_size, len(v))
-                target_dtype = torch.float32 if isinstance(v[0], float) else torch.int32
+                # per batch elem sequence
+                shape = (batch_size, len(v))
+                dtype = torch.float32 if isinstance(v[0], (float, np.floating)) else torch.int32
             else:
-                # scalar, assume per elem
-                target_shape = batch_size,
-                target_dtype = torch.float32 if isinstance(v, float) else torch.int64
-            target[k] = torch.zeros(target_shape, dtype=target_dtype)
+                # per batch elem scalar
+                shape = batch_size,
+                dtype = torch.float32 if isinstance(v, (float, np.floating)) else torch.int64
+            target_tensor = torch.full(shape, fill_value, dtype=dtype)
+            target[k] = target_tensor
+            return target_tensor, is_instance
 
-        tensor = torch.zeros((batch_size, *batch[0][0].shape), dtype=torch.uint8)
+        img_tensor = torch.zeros((batch_size, *batch[0][0].shape), dtype=torch.uint8)
         for i in range(batch_size):
-            tensor[i] += torch.from_numpy(batch[i][0])
+            img_tensor[i] += torch.from_numpy(batch[i][0])
             for tk, tv in batch[i][1].items():
-                if isinstance(tv, np.ndarray) and len(tv.shape):
-                    num_elem = min(tv.shape[0], MAX_NUM_INSTANCES)
-                    target[tk][i, 0:num_elem] = torch.from_numpy(tv[0:num_elem])
+                target_tensor, is_instance = _get_target(tk, tv)
+                if is_instance:
+                    num_elem = min(tv.shape[0], self.max_instances)
+                    target_tensor[i, 0:num_elem] = torch.from_numpy(tv[0:num_elem])
                 else:
-                    target[tk][i] = torch.tensor(tv, dtype=target[tk].dtype)
+                    target_tensor[i] = torch.tensor(tv, dtype=target_tensor.dtype)
 
-        return tensor, target
-
-
-def _to_gpu(v):
-    return v.cuda(non_blocking=True) if isinstance(v, torch.Tensor) else v
+        return img_tensor, target
 
 
 class PrefetchLoader:
@@ -81,7 +87,7 @@ class PrefetchLoader:
             with torch.cuda.stream(stream):
                 next_input = next_input.cuda(non_blocking=True)
                 next_input = next_input.float().sub_(self.mean).div_(self.std)
-                next_target = {k: _to_gpu(v) for k, v in next_target.items()}
+                next_target = {k: v.cuda(non_blocking=True) for k, v in next_target.items()}
                 if self.random_erasing is not None:
                     next_input = self.random_erasing(next_input, next_target)
 
@@ -165,7 +171,7 @@ def create_loader(
         num_workers=num_workers,
         sampler=sampler,
         pin_memory=pin_mem,
-        collate_fn=FastCollate() if use_prefetcher else torch.utils.data.dataloader.default_collate,
+        collate_fn=DetectionFastCollate() if use_prefetcher else torch.utils.data.dataloader.default_collate,
     )
     if use_prefetcher:
         if is_train:

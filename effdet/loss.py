@@ -101,7 +101,8 @@ def focal_loss(logits, targets, alpha: float, gamma: float, normalizer, label_sm
     modulating_factor = (1. - p_t) ** gamma
 
     # apply label smoothing for cross_entropy for each entry.
-    targets = targets * (1. - label_smoothing) + .5 * label_smoothing
+    if label_smoothing > 0.:
+        targets = targets * (1. - label_smoothing) + .5 * label_smoothing
     ce = F.binary_cross_entropy_with_logits(logits, targets, reduction='none')
 
     # compute the final loss and return
@@ -229,7 +230,7 @@ def loss_fn(
                 alpha=alpha, gamma=gamma, normalizer=num_positives_sum, label_smoothing=label_smoothing)
         cls_loss = cls_loss.view(bs, height, width, -1, num_classes)
         cls_loss = cls_loss * (cls_targets_at_level != -2).unsqueeze(-1)
-        cls_losses.append(cls_loss.sum())
+        cls_losses.append(cls_loss.sum())   # FIXME reference code added a clamp here at some point ...clamp(0, 2))
 
         box_losses.append(_box_loss(
             box_outputs[l].permute(0, 2, 3, 1).float(),
@@ -271,8 +272,6 @@ class DetectionLoss(nn.Module):
             box_targets: List[torch.Tensor],
             num_positives: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
 
-        #  FIXME I'd like to assign and script the loss fun in the init but deepcopy doesn't work with
-        #  ScriptedFunction/ScriptedModule members right now and deepcopy is required for ModelEma as currently impl
         loss_kwargs = dict(
             num_classes=self.num_classes, alpha=self.alpha, gamma=self.gamma, delta=self.delta,
             box_loss_weight=self.box_loss_weight, label_smoothing=self.label_smoothing, legacy_focal=self.legacy_focal)

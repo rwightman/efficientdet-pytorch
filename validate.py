@@ -4,7 +4,6 @@
 Hacked together by Ross Wightman (https://github.com/rwightman)
 """
 import argparse
-import json
 import time
 import torch
 import torch.nn.parallel
@@ -131,7 +130,7 @@ def validate(args):
     last_idx = len(loader) - 1
     with torch.no_grad():
         for i, (input, target) in enumerate(loader):
-            output = bench(input, target['img_scale'], target['img_size'])
+            output = bench(input, img_info=target)
             evaluator.add_predictions(output, target)
 
             # measure elapsed time

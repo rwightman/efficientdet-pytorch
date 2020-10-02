@@ -22,24 +22,12 @@ def create_model_from_config(
     if pretrained or checkpoint_path:
         pretrained_backbone = False  # no point in loading backbone weights
 
-    # Config overrides, override some config value from args. FIXME need a cleaner mechanism or allow
-    # config defs via files.
-    redundant_bias = kwargs.pop('redundant_bias', None)
-    if redundant_bias is not None:
-        # override config if set to something
-        config.redundant_bias = redundant_bias
-
-    label_smoothing = kwargs.pop('label_smoothing', None)
-    if label_smoothing is not None:
-        config.label_smoothing = label_smoothing
-
-    legacy_focal = kwargs.pop('legacy_focal', None)
-    if legacy_focal is not None:
-        config.legacy_focal = legacy_focal
-
-    jit_loss = kwargs.pop('jit_loss', None)
-    if jit_loss is not None:
-        config.jit_loss = jit_loss
+    # Config overrides, override some config values via kwargs.
+    overrides = ('redundant_bias', 'label_smoothing', 'legacy_focal', 'jit_loss')
+    for ov in overrides:
+        value = kwargs.pop(ov, None)
+        if value is not None:
+            setattr(config, ov, value)
 
     # create the base model
     model = EfficientDet(config, pretrained_backbone=pretrained_backbone, **kwargs)
