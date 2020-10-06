@@ -87,6 +87,7 @@ class DetBenchTrain(nn.Module):
         self.model = model
         self.config = model.config
         self.anchors = Anchors.from_config(self.config)
+        self.anchor_labeler = None
         if not no_labeler:
             self.anchor_labeler = AnchorLabeler(self.anchors, self.config.num_classes, match_threshold=0.5)
         self.loss_fn = DetectionLoss(self.config)
