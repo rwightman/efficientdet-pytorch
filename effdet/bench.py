@@ -69,10 +69,7 @@ class DetBenchPredict(nn.Module):
         super(DetBenchPredict, self).__init__()
         self.model = model
         self.config = model.config
-        self.anchors = Anchors(
-            self.config.min_level, self.config.max_level,
-            self.config.num_scales, self.config.aspect_ratios,
-            self.config.anchor_scale, self.config.image_size)
+        self.anchors = Anchors.from_config(self.config)
 
     def forward(self, x, img_info: Dict[str, torch.Tensor] = None):
         class_out, box_out = self.model(x)
@@ -89,11 +86,7 @@ class DetBenchTrain(nn.Module):
         super(DetBenchTrain, self).__init__()
         self.model = model
         self.config = model.config
-        self.anchors = Anchors(
-            self.config.min_level, self.config.max_level,
-            self.config.num_scales, self.config.aspect_ratios,
-            self.config.anchor_scale, self.config.image_size)
-        self.anchor_labeler = None
+        self.anchors = Anchors.from_config(self.config)
         if not no_labeler:
             self.anchor_labeler = AnchorLabeler(self.anchors, self.config.num_classes, match_threshold=0.5)
         self.loss_fn = DetectionLoss(self.config)

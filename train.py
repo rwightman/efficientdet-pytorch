@@ -432,14 +432,10 @@ def create_datasets_and_loaders(args, model_config):
 
     dataset_train, dataset_eval = create_dataset(args.dataset, args.root)
 
-    anchors = Anchors(
-        model_config.min_level, model_config.max_level,
-        model_config.num_scales, model_config.aspect_ratios,
-        model_config.anchor_scale, model_config.image_size)
-
     labeler = None
     if args.loader_labeler:
-        labeler = AnchorLabeler(anchors, model_config.num_classes, match_threshold=0.5)
+        labeler = AnchorLabeler(
+            Anchors.from_config(model_config), model_config.num_classes, match_threshold=0.5)
 
     loader_train = create_loader(
         dataset_train,

@@ -160,12 +160,12 @@ def generate_detections(
     # that is the preferred output format.
 
     # stack em and pad out to MAX_DETECTIONS_PER_IMAGE if necessary
+    num_det = len(top_detection_idx)
     detections = torch.cat([boxes, scores, classes.float()], dim=1)
-    if len(top_detection_idx) < max_det_per_image:
+    if num_det < max_det_per_image:
         detections = torch.cat([
             detections,
-            torch.zeros(
-                (max_det_per_image - len(top_detection_idx), 6), device=detections.device, dtype=detections.dtype)
+            torch.zeros((max_det_per_image - num_det, 6), device=detections.device, dtype=detections.dtype)
         ], dim=0)
     return detections
 
@@ -231,6 +231,13 @@ class Anchors(nn.Module):
         self.feat_sizes = get_feat_sizes(image_size, max_level)
         self.config = self._generate_configs()
         self.register_buffer('boxes', self._generate_boxes())
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(
+            config.min_level, config.max_level,
+            config.num_scales, config.aspect_ratios,
+            config.anchor_scale, config.image_size)
 
     def _generate_configs(self):
         """Generate configurations of anchor boxes."""
@@ -344,7 +351,7 @@ class AnchorLabeler(object):
         anchor_box_list = BoxList(self.anchors.boxes)
 
         # cls_weights, box_weights are not used
-        cls_targets, _, box_targets, _, matches = self.target_assigner.assign(anchor_box_list, gt_box_list, gt_labels)
+        cls_targets, box_targets, matches = self.target_assigner.assign(anchor_box_list, gt_box_list, gt_labels)
 
         # class labels start from 1 and the background class = -1
         cls_targets = (cls_targets - 1).long()
@@ -359,7 +366,7 @@ class AnchorLabeler(object):
             box_targets_out.append(box_targets[count:count + steps].view([feat_size[0], feat_size[1], -1]))
             count += steps
 
-        num_positives = (matches.match_results != -1).float().sum()
+        num_positives = (matches.match_results > -1).float().sum()
 
         return cls_targets_out, box_targets_out, num_positives
 
@@ -375,9 +382,10 @@ class AnchorLabeler(object):
         anchor_box_list = BoxList(self.anchors.boxes)
         for i in range(batch_size):
             last_sample = i == batch_size - 1
-            # cls_weights, box_weights are not used
-            cls_targets, _, box_targets, _, matches = self.target_assigner.assign(
-                anchor_box_list, BoxList(gt_boxes[i]), gt_classes[i])
+
+            valid_idx = gt_classes[i] > -1
+            cls_targets, box_targets, matches = self.target_assigner.assign(
+                anchor_box_list, BoxList(gt_boxes[i][valid_idx]), gt_classes[i][valid_idx])
 
             # class labels start from 1 and the background class = -1
             cls_targets = (cls_targets - 1).long()
@@ -386,19 +394,19 @@ class AnchorLabeler(object):
             """Unpacks an array of cls/box into multiple scales."""
             count = 0
             for level in range(self.anchors.min_level, self.anchors.max_level + 1):
-                level_index = level - self.anchors.min_level
+                level_idx = level - self.anchors.min_level
                 feat_size = self.anchors.feat_sizes[level]
                 steps = feat_size[0] * feat_size[1] * self.anchors.get_anchors_per_location()
-                cls_targets_out[level_index].append(
+                cls_targets_out[level_idx].append(
                     cls_targets[count:count + steps].view([feat_size[0], feat_size[1], -1]))
-                box_targets_out[level_index].append(
+                box_targets_out[level_idx].append(
                     box_targets[count:count + steps].view([feat_size[0], feat_size[1], -1]))
                 count += steps
                 if last_sample:
-                    cls_targets_out[level_index] = torch.stack(cls_targets_out[level_index])
-                    box_targets_out[level_index] = torch.stack(box_targets_out[level_index])
+                    cls_targets_out[level_idx] = torch.stack(cls_targets_out[level_idx])
+                    box_targets_out[level_idx] = torch.stack(box_targets_out[level_idx])
 
-            num_positives_out.append((matches.match_results != -1).float().sum())
+            num_positives_out.append((matches.match_results > -1).float().sum())
             if last_sample:
                 num_positives_out = torch.stack(num_positives_out)
 

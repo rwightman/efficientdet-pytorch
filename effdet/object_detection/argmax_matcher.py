@@ -111,7 +111,7 @@ class ArgMaxMatcher(object):  # cannot inherit with torchscript
         Returns:
             matches:  int32 tensor indicating the row each column matches to.
         """
-        return -1 * torch.ones(similarity_matrix.shape[1], dtype=torch.long)
+        return -1 * torch.ones(similarity_matrix.shape[1], dtype=torch.long, device=similarity_matrix.device)
 
     def _match_when_rows_are_non_empty(self, similarity_matrix):
         """Performs matching when the rows of similarity matrix are non empty.

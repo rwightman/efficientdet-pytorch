@@ -160,15 +160,20 @@ class Match(object):
 
         Args:
             input_tensor: Tensor to gather values from.
-            unmatched_value: Constant tensor value for unmatched columns.
-            ignored_value: Constant tensor value for ignored columns.
+            unmatched_value: Constant tensor or python scalar value for unmatched columns.
+            ignored_value: Constant tensor or python scalar for ignored columns.
 
         Returns:
             gathered_tensor: A tensor containing values gathered from input_tensor.
                 The shape of the gathered tensor is [match_results.shape[0]] + input_tensor.shape[1:].
         """
-        ss = torch.stack([ignored_value, unmatched_value])
-        input_tensor = torch.cat([ss, input_tensor], dim=0)
+        if isinstance(ignored_value, torch.Tensor):
+            input_tensor = torch.cat([ignored_value, unmatched_value, input_tensor], dim=0)
+        else:
+            # scalars
+            input_tensor = torch.cat([
+                torch.tensor([ignored_value, unmatched_value], dtype=input_tensor.dtype, device=input_tensor.device),
+                input_tensor], dim=0)
         gather_indices = torch.clamp(self.match_results + 2, min=0)
         gathered_tensor = torch.index_select(input_tensor, 0, gather_indices)
         return gathered_tensor

@@ -13,7 +13,13 @@ MAX_NUM_INSTANCES = 100
 
 
 class DetectionFastCollate:
+    """ A detection specific, optimized collate function w/ a bit of state.
 
+    Optionally performs anchor labelling. Doing this here offloads some work from the
+    GPU and the main training process thread and increases the load on the dataloader
+    threads.
+
+    """
     def __init__(
             self,
             instance_keys=None,
@@ -40,6 +46,7 @@ class DetectionFastCollate:
             for tk, tv in batch[i][1].items():
                 instance_info = self.instance_info.get(tk, None)
                 if instance_info is not None:
+                    # target tensor is associated with a detection instance
                     tv = torch.from_numpy(tv).to(dtype=torch.float32)
                     if self.anchor_labeler is None:
                         if i == 0:
@@ -51,10 +58,13 @@ class DetectionFastCollate:
                         num_elem = min(tv.shape[0], self.max_instances)
                         target_tensor[i, 0:num_elem] = tv[0:num_elem]
                     else:
+                        # no need to pass gt tensors through when labeler in use
                         if tk in ('bbox', 'cls'):
                             labeler_inputs[tk] = tv
                 else:
+                    # target tensor is an image-level annotation / metadata
                     if i == 0:
+                        # first batch elem, create destination tensors
                         if isinstance(tv, (tuple, list)):
                             # per batch elem sequence
                             shape = (batch_size, len(tv))
@@ -73,6 +83,7 @@ class DetectionFastCollate:
                 cls_targets, box_targets, num_positives = self.anchor_labeler.label_anchors(
                     labeler_inputs['bbox'], labeler_inputs['cls'])
                 if i == 0:
+                    # first batch elem, create destination tensors, separate key per level
                     for j, (ct, bt) in enumerate(zip(cls_targets, box_targets)):
                         labeler_outputs[f'label_cls_{j}'] = torch.zeros(
                             (batch_size,) + ct.shape, dtype=torch.int64)
@@ -85,6 +96,7 @@ class DetectionFastCollate:
                 labeler_outputs['label_num_positives'][i] = num_positives
         if labeler_outputs:
             target.update(labeler_outputs)
+
         return img_tensor, target
 
 
@@ -95,7 +107,7 @@ class PrefetchLoader:
             mean=IMAGENET_DEFAULT_MEAN,
             std=IMAGENET_DEFAULT_STD,
             re_prob=0.,
-            re_mode='const',
+            re_mode='pixel',
             re_count=1,
             ):
         self.loader = loader
