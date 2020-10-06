@@ -29,6 +29,8 @@ def create_model_from_config(
         if value is not None:
             setattr(config, ov, value)
 
+    no_labeler = kwargs.pop('no_labeler', False)
+
     # create the base model
     model = EfficientDet(config, pretrained_backbone=pretrained_backbone, **kwargs)
 
@@ -46,7 +48,7 @@ def create_model_from_config(
 
     # wrap model in task specific training/prediction bench if set
     if bench_task == 'train':
-        model = DetBenchTrain(model)
+        model = DetBenchTrain(model, no_labeler=no_labeler)
     elif bench_task == 'predict':
         model = DetBenchPredict(model)
     return model

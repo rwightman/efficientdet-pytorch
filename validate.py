@@ -7,17 +7,27 @@ import argparse
 import time
 import torch
 import torch.nn.parallel
-try:
-    from apex import amp
-    has_amp = True
-except ImportError:
-    has_amp = False
+from contextlib import suppress
 
 from effdet import create_model, create_evaluator, create_dataset, create_loader
 from effdet.data import resolve_input_config
+from effdet.evaluator import CocoEvaluator, PascalEvaluator
 from timm.utils import AverageMeter, setup_default_logging
 
-from effdet.evaluator import CocoEvaluator, PascalEvaluator
+
+has_apex = False
+try:
+    from apex import amp
+    has_apex = True
+except ImportError:
+    pass
+
+has_native_amp = False
+try:
+    if getattr(torch.cuda.amp, 'autocast') is not None:
+        has_native_amp = True
+except AttributeError:
+    pass
 
 torch.backends.cudnn.benchmark = True
 
@@ -71,6 +81,12 @@ parser.add_argument('--pin-mem', action='store_true', default=False,
                     help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
 parser.add_argument('--use-ema', dest='use_ema', action='store_true',
                     help='use ema version of weights if present')
+parser.add_argument('--amp', action='store_true', default=False,
+                    help='Use AMP mixed precision. Defaults to Apex, fallback to native Torch AMP.')
+parser.add_argument('--apex-amp', action='store_true', default=False,
+                    help='Use NVIDIA Apex AMP mixed precision')
+parser.add_argument('--native-amp', action='store_true', default=False,
+                    help='Use Native Torch AMP mixed precision')
 parser.add_argument('--torchscript', dest='torchscript', action='store_true',
                     help='convert model torchscript for inference')
 parser.add_argument('--results', default='./results.json', type=str, metavar='FILENAME',
@@ -80,8 +96,13 @@ parser.add_argument('--results', default='./results.json', type=str, metavar='FI
 def validate(args):
     setup_default_logging()
 
-    # might as well try to validate something
-    args.pretrained = args.pretrained or not args.checkpoint
+    if args.amp:
+        if has_apex:
+            args.apex_amp = True
+        elif has_native_amp:
+            args.native_amp = True
+    assert not args.apex_amp or not args.native_amp, "Only one AMP mode should be set."
+    args.pretrained = args.pretrained or not args.checkpoint  # might as well try to validate something
     args.prefetcher = not args.no_prefetcher
 
     # create model
@@ -100,11 +121,16 @@ def validate(args):
     print('Model %s created, param count: %d' % (args.model, param_count))
 
     bench = bench.cuda()
-    if has_amp:
-        print('Using AMP mixed precision.')
+
+    amp_autocast = suppress
+    if args.apex_amp:
         bench = amp.initialize(bench, opt_level='O1')
+        print('Using NVIDIA APEX AMP. Validating in mixed precision.')
+    elif args.native_amp:
+        amp_autocast = torch.cuda.amp.autocast
+        print('Using native Torch AMP. Validating in mixed precision.')
     else:
-        print('AMP not installed, running network in FP32.')
+        print('AMP not enabled. Validating in float32.')
 
     if args.num_gpu > 1:
         bench = torch.nn.DataParallel(bench, device_ids=list(range(args.num_gpu)))
@@ -130,7 +156,8 @@ def validate(args):
     last_idx = len(loader) - 1
     with torch.no_grad():
         for i, (input, target) in enumerate(loader):
-            output = bench(input, img_info=target)
+            with amp_autocast():
+                output = bench(input, img_info=target)
             evaluator.add_predictions(output, target)
 
             # measure elapsed time

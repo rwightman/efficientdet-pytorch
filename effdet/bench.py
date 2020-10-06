@@ -85,7 +85,7 @@ class DetBenchPredict(nn.Module):
 
 
 class DetBenchTrain(nn.Module):
-    def __init__(self, model):
+    def __init__(self, model, no_labeler=False):
         super(DetBenchTrain, self).__init__()
         self.model = model
         self.config = model.config
@@ -93,13 +93,23 @@ class DetBenchTrain(nn.Module):
             self.config.min_level, self.config.max_level,
             self.config.num_scales, self.config.aspect_ratios,
             self.config.anchor_scale, self.config.image_size)
-        self.anchor_labeler = AnchorLabeler(self.anchors, self.config.num_classes, match_threshold=0.5)
+        self.anchor_labeler = None
+        if not no_labeler:
+            self.anchor_labeler = AnchorLabeler(self.anchors, self.config.num_classes, match_threshold=0.5)
         self.loss_fn = DetectionLoss(self.config)
 
     def forward(self, x, target: Dict[str, torch.Tensor]):
         class_out, box_out = self.model(x)
-        cls_targets, box_targets, num_positives = self.anchor_labeler.batch_label_anchors(
-            x.shape[0], target['bbox'], target['cls'])
+        if self.anchor_labeler is None:
+            # target should contain pre-computed anchor labels
+            assert 'label_num_positives' in target
+            cls_targets = [target[f'label_cls_{l}'] for l in range(self.config.num_levels)]
+            box_targets = [target[f'label_bbox_{l}'] for l in range(self.config.num_levels)]
+            num_positives = target['label_num_positives']
+        else:
+            cls_targets, box_targets, num_positives = self.anchor_labeler.batch_label_anchors(
+                target['bbox'], target['cls'])
+
         loss, class_loss, box_loss = self.loss_fn(class_out, box_out, cls_targets, box_targets, num_positives)
         output = dict(loss=loss, class_loss=class_loss, box_loss=box_loss)
         if not self.training:

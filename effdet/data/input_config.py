@@ -23,9 +23,10 @@ def resolve_input_config(args, model_config=None, model=None):
     #     assert isinstance(args['img_size'], int)
     #     input_size = (in_chans, args['img_size'], args['img_size'])
     if 'input_size' in model_config:
-        input_size = model_config['input_size']
+        input_size = tuple(model_config['input_size'])
     elif 'image_size' in model_config:
-        input_size = (in_chans, model_config['image_size'], model_config['image_size'])
+        input_size = (in_chans,) + tuple(model_config['image_size'])
+    assert isinstance(input_size, tuple) and len(input_size) == 3
     input_config['input_size'] = input_size
 
     # resolve interpolation method
@@ -62,7 +63,6 @@ def resolve_input_config(args, model_config=None, model=None):
     # resolve letterbox fill color
     input_config['fill_color'] = 'mean'
     if 'fill_color' in args and args['fill_color'] is not None:
-        print('ff')
         input_config['fill_color'] = args['fill_color']
     elif 'fill_color' in model_config:
         input_config['fill_color'] = model_config['fill_color']

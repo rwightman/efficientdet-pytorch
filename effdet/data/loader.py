@@ -5,59 +5,86 @@ Hacked together by / Copyright 2020 Ross Wightman
 import torch.utils.data
 from .transforms import *
 from .random_erasing import RandomErasing
+from effdet.anchors import AnchorLabeler
 from timm.data.distributed_sampler import OrderedDistributedSampler
-
+import os
 
 MAX_NUM_INSTANCES = 100
 
 
 class DetectionFastCollate:
 
-    def __init__(self, instance_keys=None, instance_shapes=None, instance_fill=-1, max_instances=MAX_NUM_INSTANCES):
+    def __init__(
+            self,
+            instance_keys=None,
+            instance_shapes=None,
+            instance_fill=-1,
+            max_instances=MAX_NUM_INSTANCES,
+            anchor_labeler=None,
+    ):
         instance_keys = instance_keys or {'bbox', 'bbox_ignore', 'cls'}
         instance_shapes = instance_shapes or dict(
             bbox=(max_instances, 4), bbox_ignore=(max_instances, 4), cls=(max_instances,))
         self.instance_info = {k: dict(fill=instance_fill, shape=instance_shapes[k]) for k in instance_keys}
         self.max_instances = max_instances
+        self.anchor_labeler = anchor_labeler
 
     def __call__(self, batch):
         batch_size = len(batch)
         target = dict()
-
-        def _get_target(k, v):
-            if k in target:
-                return target[k], k in self.instance_info
-            is_instance = False
-            fill_value = 0
-            if k in self.instance_info:
-                info = self.instance_info[k]
-                is_instance = True
-                fill_value = info['fill']
-                shape = (batch_size,) + info['shape']
-                dtype = torch.float32
-            elif isinstance(v, (tuple, list)):
-                # per batch elem sequence
-                shape = (batch_size, len(v))
-                dtype = torch.float32 if isinstance(v[0], (float, np.floating)) else torch.int32
-            else:
-                # per batch elem scalar
-                shape = batch_size,
-                dtype = torch.float32 if isinstance(v, (float, np.floating)) else torch.int64
-            target_tensor = torch.full(shape, fill_value, dtype=dtype)
-            target[k] = target_tensor
-            return target_tensor, is_instance
-
+        labeler_outputs = dict()
         img_tensor = torch.zeros((batch_size, *batch[0][0].shape), dtype=torch.uint8)
         for i in range(batch_size):
             img_tensor[i] += torch.from_numpy(batch[i][0])
+            labeler_inputs = {}
             for tk, tv in batch[i][1].items():
-                target_tensor, is_instance = _get_target(tk, tv)
-                if is_instance:
-                    num_elem = min(tv.shape[0], self.max_instances)
-                    target_tensor[i, 0:num_elem] = torch.from_numpy(tv[0:num_elem])
+                instance_info = self.instance_info.get(tk, None)
+                if instance_info is not None:
+                    tv = torch.from_numpy(tv).to(dtype=torch.float32)
+                    if self.anchor_labeler is None:
+                        if i == 0:
+                            shape = (batch_size,) + instance_info['shape']
+                            target_tensor = torch.full(shape, instance_info['fill'], dtype=torch.float32)
+                            target[tk] = target_tensor
+                        else:
+                            target_tensor = target[tk]
+                        num_elem = min(tv.shape[0], self.max_instances)
+                        target_tensor[i, 0:num_elem] = tv[0:num_elem]
+                    else:
+                        if tk in ('bbox', 'cls'):
+                            labeler_inputs[tk] = tv
                 else:
+                    if i == 0:
+                        if isinstance(tv, (tuple, list)):
+                            # per batch elem sequence
+                            shape = (batch_size, len(tv))
+                            dtype = torch.float32 if isinstance(tv[0], (float, np.floating)) else torch.int32
+                        else:
+                            # per batch elem scalar
+                            shape = batch_size,
+                            dtype = torch.float32 if isinstance(tv, (float, np.floating)) else torch.int64
+                        target_tensor = torch.zeros(shape, dtype=dtype)
+                        target[tk] = target_tensor
+                    else:
+                        target_tensor = target[tk]
                     target_tensor[i] = torch.tensor(tv, dtype=target_tensor.dtype)
 
+            if self.anchor_labeler is not None:
+                cls_targets, box_targets, num_positives = self.anchor_labeler.label_anchors(
+                    labeler_inputs['bbox'], labeler_inputs['cls'])
+                if i == 0:
+                    for j, (ct, bt) in enumerate(zip(cls_targets, box_targets)):
+                        labeler_outputs[f'label_cls_{j}'] = torch.zeros(
+                            (batch_size,) + ct.shape, dtype=torch.int64)
+                        labeler_outputs[f'label_bbox_{j}'] = torch.zeros(
+                            (batch_size,) + bt.shape, dtype=torch.float32)
+                    labeler_outputs['label_num_positives'] = torch.zeros(batch_size)
+                for j, (ct, bt) in enumerate(zip(cls_targets, box_targets)):
+                    labeler_outputs[f'label_cls_{j}'][i] = ct
+                    labeler_outputs[f'label_bbox_{j}'][i] = bt
+                labeler_outputs['label_num_positives'][i] = num_positives
+        if labeler_outputs:
+            target.update(labeler_outputs)
         return img_tensor, target
 
 
@@ -118,7 +145,7 @@ def create_loader(
         dataset,
         input_size,
         batch_size,
-        is_train=False,
+        is_training=False,
         use_prefetcher=True,
         re_prob=0.,
         re_mode='pixel',
@@ -130,13 +157,14 @@ def create_loader(
         num_workers=1,
         distributed=False,
         pin_mem=False,
+        anchor_labeler=None,
 ):
     if isinstance(input_size, tuple):
         img_size = input_size[-2:]
     else:
         img_size = input_size
 
-    if is_train:
+    if is_training:
         transform = transforms_coco_train(
             img_size,
             interpolation=interpolation,
@@ -157,24 +185,25 @@ def create_loader(
 
     sampler = None
     if distributed:
-        if is_train:
+        if is_training:
             sampler = torch.utils.data.distributed.DistributedSampler(dataset)
         else:
             # This will add extra duplicate entries to result in equal num
             # of samples per-process, will slightly alter validation results
             sampler = OrderedDistributedSampler(dataset)
 
+    collate_fn = DetectionFastCollate(anchor_labeler=anchor_labeler)
     loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,
-        shuffle=False,
+        shuffle=sampler is None and is_training,
         num_workers=num_workers,
         sampler=sampler,
         pin_memory=pin_mem,
-        collate_fn=DetectionFastCollate() if use_prefetcher else torch.utils.data.dataloader.default_collate,
+        collate_fn=collate_fn,
     )
     if use_prefetcher:
-        if is_train:
+        if is_training:
             loader = PrefetchLoader(loader, mean=mean, std=std, re_prob=re_prob, re_mode=re_mode, re_count=re_count)
         else:
             loader = PrefetchLoader(loader, mean=mean, std=std)

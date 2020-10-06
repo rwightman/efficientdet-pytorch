@@ -38,6 +38,7 @@ except AttributeError:
 
 from effdet import create_model, unwrap_bench, create_loader, create_dataset, create_evaluator
 from effdet.data import resolve_input_config, SkipSubset
+from effdet.anchors import Anchors, AnchorLabeler
 from timm.models import resume_checkpoint, load_checkpoint
 from timm.utils import *
 from timm.optim import create_optimizer
@@ -186,6 +187,8 @@ parser.add_argument('--pin-mem', action='store_true', default=False,
                     help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
 parser.add_argument('--no-prefetcher', action='store_true', default=False,
                     help='disable fast prefetcher')
+add_bool_arg(parser, 'loader-labeler', default=False,
+             help='label targets in loader, reduces GPU load somewhat')
 parser.add_argument('--output', default='', type=str, metavar='PATH',
                     help='path to output folder (default: none, current dir)')
 parser.add_argument('--eval-metric', default='map', type=str, metavar='EVAL_METRIC',
@@ -248,6 +251,7 @@ def main():
         else:
             logging.warning("Neither APEX or native Torch AMP is available, using float32. "
                             "Install NVIDA apex or upgrade to PyTorch 1.6.")
+
     if args.apex_amp:
         if has_apex:
             use_amp = 'apex'
@@ -271,6 +275,7 @@ def main():
         label_smoothing=args.smoothing,
         legacy_focal=args.legacy_focal,
         jit_loss=args.jit_loss,
+        no_labeler=args.loader_labeler,
         checkpoint_path=args.initial_checkpoint,
     )
     model_config = model.config  # grab before we obscure with DP/DDP wrappers
@@ -427,11 +432,20 @@ def create_datasets_and_loaders(args, model_config):
 
     dataset_train, dataset_eval = create_dataset(args.dataset, args.root)
 
+    anchors = Anchors(
+        model_config.min_level, model_config.max_level,
+        model_config.num_scales, model_config.aspect_ratios,
+        model_config.anchor_scale, model_config.image_size)
+
+    labeler = None
+    if args.loader_labeler:
+        labeler = AnchorLabeler(anchors, model_config.num_classes, match_threshold=0.5)
+
     loader_train = create_loader(
         dataset_train,
         input_size=input_config['input_size'],
         batch_size=args.batch_size,
-        is_train=True,
+        is_training=True,
         use_prefetcher=args.prefetcher,
         re_prob=args.reprob,
         re_mode=args.remode,
@@ -445,6 +459,7 @@ def create_datasets_and_loaders(args, model_config):
         num_workers=args.workers,
         distributed=args.distributed,
         pin_mem=args.pin_mem,
+        anchor_labeler=labeler,
     )
 
     if args.val_skip > 1:
@@ -453,7 +468,7 @@ def create_datasets_and_loaders(args, model_config):
         dataset_eval,
         input_size=input_config['input_size'],
         batch_size=args.batch_size,
-        is_train=False,
+        is_training=False,
         use_prefetcher=args.prefetcher,
         interpolation=input_config['interpolation'],
         fill_color=input_config['fill_color'],
@@ -462,6 +477,7 @@ def create_datasets_and_loaders(args, model_config):
         num_workers=args.workers,
         distributed=args.distributed,
         pin_mem=args.pin_mem,
+        anchor_labeler=labeler,
     )
 
     evaluator = create_evaluator(args.dataset, loader_eval.dataset, distributed=args.distributed, pred_yxyx=False)
