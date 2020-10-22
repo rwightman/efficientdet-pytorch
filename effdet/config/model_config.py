@@ -60,7 +60,7 @@ def default_detection_model_configs():
     h.gamma = 1.5
     h.label_smoothing = 0.  # only supported if legacy_focal == False
     h.legacy_focal = False  # use legacy focal loss (no label smoothing, legacy uses less mem, has higher throughput
-    h.jit_loss = True  # torchscript jit for loss fn speed improvement, can impact stability and/or increase mem usage
+    h.jit_loss = False  # torchscript jit for loss fn speed improvement, can impact stability and/or increase mem usage
 
     # localization loss (used by train bench)
     h.delta = 0.1

@@ -82,20 +82,20 @@ class DetBenchPredict(nn.Module):
 
 
 class DetBenchTrain(nn.Module):
-    def __init__(self, model, no_labeler=False):
+    def __init__(self, model, create_labeler=True):
         super(DetBenchTrain, self).__init__()
         self.model = model
         self.config = model.config
         self.anchors = Anchors.from_config(self.config)
         self.anchor_labeler = None
-        if not no_labeler:
+        if create_labeler:
             self.anchor_labeler = AnchorLabeler(self.anchors, self.config.num_classes, match_threshold=0.5)
         self.loss_fn = DetectionLoss(self.config)
 
     def forward(self, x, target: Dict[str, torch.Tensor]):
         class_out, box_out = self.model(x)
         if self.anchor_labeler is None:
-            # target should contain pre-computed anchor labels
+            # target should contain pre-computed anchor labels if labeler not present in bench
             assert 'label_num_positives' in target
             cls_targets = [target[f'label_cls_{l}'] for l in range(self.config.num_levels)]
             box_targets = [target[f'label_bbox_{l}'] for l in range(self.config.num_levels)]

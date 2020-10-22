@@ -187,8 +187,8 @@ parser.add_argument('--pin-mem', action='store_true', default=False,
                     help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
 parser.add_argument('--no-prefetcher', action='store_true', default=False,
                     help='disable fast prefetcher')
-add_bool_arg(parser, 'loader-labeler', default=False,
-             help='label targets in loader, reduces GPU load somewhat')
+add_bool_arg(parser, 'bench-labeler', default=False,
+             help='label targets in model bench, increases GPU load at expense of loader processes')
 parser.add_argument('--output', default='', type=str, metavar='PATH',
                     help='path to output folder (default: none, current dir)')
 parser.add_argument('--eval-metric', default='map', type=str, metavar='EVAL_METRIC',
@@ -275,7 +275,7 @@ def main():
         label_smoothing=args.smoothing,
         legacy_focal=args.legacy_focal,
         jit_loss=args.jit_loss,
-        no_labeler=args.loader_labeler,
+        bench_labeler=args.bench_labeler,
         checkpoint_path=args.initial_checkpoint,
     )
     model_config = model.config  # grab before we obscure with DP/DDP wrappers
@@ -325,7 +325,7 @@ def main():
     if args.distributed:
         if args.sync_bn:
             try:
-                if has_apex:
+                if has_apex and use_amp != 'native':
                     model = convert_syncbn_model(model)
                 else:
                     model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
@@ -335,11 +335,13 @@ def main():
                         'zero initialized BN layers (enabled by default for ResNets) while sync-bn enabled.')
             except Exception as e:
                 logging.error('Failed to enable Synchronized BatchNorm. Install Apex or Torch >= 1.1')
-        if has_apex:
+        if has_apex and use_amp != 'native':
+            if args.local_rank == 0:
+                logging.info("Using apex DistributedDataParallel.")
             model = ApexDDP(model, delay_allreduce=True)
         else:
             if args.local_rank == 0:
-                logging.info("Using torch DistributedDataParallel. Install NVIDIA Apex for Apex DDP.")
+                logging.info("Using torch DistributedDataParallel.")
             model = NativeDDP(model, device_ids=[args.device])
         # NOTE: EMA model does not need to be wrapped by DDP
 
@@ -432,8 +434,9 @@ def create_datasets_and_loaders(args, model_config):
 
     dataset_train, dataset_eval = create_dataset(args.dataset, args.root)
 
+    # setup labeler in loader/collate_fn if not enabled in the model bench
     labeler = None
-    if args.loader_labeler:
+    if not args.bench_labeler:
         labeler = AnchorLabeler(
             Anchors.from_config(model_config), model_config.num_classes, match_threshold=0.5)
 

@@ -324,14 +324,16 @@ class AnchorLabeler(object):
         self.num_classes = num_classes
         self.indices_cache = {}
 
-    def label_anchors(self, gt_boxes, gt_labels):
+    def label_anchors(self, gt_boxes, gt_classes, filter_valid=True):
         """Labels anchors with ground truth inputs.
 
         Args:
             gt_boxes: A float tensor with shape [N, 4] representing groundtruth boxes.
                 For each row, it stores [y0, x0, y1, x1] for four corners of a box.
 
-            gt_labels: A integer tensor with shape [N, 1] representing groundtruth classes.
+            gt_classes: A integer tensor with shape [N, 1] representing groundtruth classes.
+
+            filter_valid: Filter out any boxes w/ gt class <= -1 before assigning
 
         Returns:
             cls_targets_dict: ordered dictionary with keys [min_level, min_level+1, ..., max_level].
@@ -347,11 +349,13 @@ class AnchorLabeler(object):
         cls_targets_out = []
         box_targets_out = []
 
-        gt_box_list = BoxList(gt_boxes)
-        anchor_box_list = BoxList(self.anchors.boxes)
+        if filter_valid:
+            valid_idx = gt_classes > -1  # filter gt targets w/ label <= -1
+            gt_boxes = gt_boxes[valid_idx]
+            gt_classes = gt_classes[valid_idx]
 
-        # cls_weights, box_weights are not used
-        cls_targets, box_targets, matches = self.target_assigner.assign(anchor_box_list, gt_box_list, gt_labels)
+        cls_targets, box_targets, matches = self.target_assigner.assign(
+            BoxList(self.anchors.boxes), BoxList(gt_boxes), gt_classes)
 
         # class labels start from 1 and the background class = -1
         cls_targets = (cls_targets - 1).long()
@@ -370,22 +374,26 @@ class AnchorLabeler(object):
 
         return cls_targets_out, box_targets_out, num_positives
 
-    def batch_label_anchors(self, gt_boxes, gt_classes):
+    def batch_label_anchors(self, gt_boxes, gt_classes, filter_valid=True):
         batch_size = len(gt_boxes)
-        assert len(gt_classes) == len(gt_boxes)
+        assert batch_size == len(gt_classes)
         num_levels = self.anchors.max_level - self.anchors.min_level + 1
         cls_targets_out = [[] for _ in range(num_levels)]
         box_targets_out = [[] for _ in range(num_levels)]
         num_positives_out = []
 
-        # FIXME this may be a bottleneck, would be faster if batched, or should be done in loader/dataset?
         anchor_box_list = BoxList(self.anchors.boxes)
         for i in range(batch_size):
             last_sample = i == batch_size - 1
 
-            valid_idx = gt_classes[i] > -1
-            cls_targets, box_targets, matches = self.target_assigner.assign(
-                anchor_box_list, BoxList(gt_boxes[i][valid_idx]), gt_classes[i][valid_idx])
+            if filter_valid:
+                valid_idx = gt_classes[i] > -1  # filter gt targets w/ label <= -1
+                gt_box_list = BoxList(gt_boxes[i][valid_idx])
+                gt_class_i = gt_classes[i][valid_idx]
+            else:
+                gt_box_list = BoxList(gt_boxes[i])
+                gt_class_i = gt_classes[i]
+            cls_targets, box_targets, matches = self.target_assigner.assign(anchor_box_list, gt_box_list, gt_class_i)
 
             # class labels start from 1 and the background class = -1
             cls_targets = (cls_targets - 1).long()

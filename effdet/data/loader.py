@@ -81,7 +81,7 @@ class DetectionFastCollate:
 
             if self.anchor_labeler is not None:
                 cls_targets, box_targets, num_positives = self.anchor_labeler.label_anchors(
-                    labeler_inputs['bbox'], labeler_inputs['cls'])
+                    labeler_inputs['bbox'], labeler_inputs['cls'], filter_valid=False)
                 if i == 0:
                     # first batch elem, create destination tensors, separate key per level
                     for j, (ct, bt) in enumerate(zip(cls_targets, box_targets)):
