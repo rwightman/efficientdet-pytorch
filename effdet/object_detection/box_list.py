@@ -130,7 +130,7 @@ class BoxList(object):
             ValueError: if invalid field
         """
         if not self.has_field(field):
-            raise ValueError('field ' + str(field) + ' does not exist')
+            raise ValueError(f'field {field} does not exist')
         return self.data[field]
 
     def set_field(self, field: str, value: torch.Tensor):
@@ -146,7 +146,7 @@ class BoxList(object):
             ValueError: if the box_list does not have specified field.
         """
         if not self.has_field(field):
-            raise ValueError('field %s does not exist' % field)
+            raise ValueError(f'field {field} does not exist')
         self.data[field] = value
 
     def get_center_coordinates_and_sizes(self):
