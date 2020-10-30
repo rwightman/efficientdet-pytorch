@@ -216,8 +216,9 @@ class ObjectDetectionEvaluator(DetectionEvaluator):
             gt_difficult = gt_dict[InputDataFields.gt_difficult]
         else:
             gt_difficult = None
-            if not len(self._image_ids) % 1000:
-                logging.warning('image %s does not have groundtruth difficult flag specified', image_id)
+            # FIXME disable difficult flag warning, will support flag eventually
+            # if not len(self._image_ids) % 1000:
+            #     logging.warning('image %s does not have groundtruth difficult flag specified', image_id)
         gt_masks = None
         if self._evaluate_masks:
             if InputDataFields.gt_instance_masks not in gt_dict:
@@ -431,8 +432,9 @@ class OpenImagesDetectionEvaluator(ObjectDetectionEvaluator):
             gt_group_of = gt_dict[InputDataFields.gt_group_of]
         else:
             gt_group_of = None
-            if not len(self._image_ids) % 1000:
-                logging.warning('image %s does not have groundtruth group_of flag specified', image_id)
+            # FIXME disable warning for now, will add group_of flag eventually
+            # if not len(self._image_ids) % 1000:
+            #     logging.warning('image %s does not have groundtruth group_of flag specified', image_id)
         if self._evaluate_masks:
             gt_masks = gt_dict[InputDataFields.gt_instance_masks]
         else:

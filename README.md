@@ -16,7 +16,32 @@ Aside from the default model configs, there is a lot of flexibility to facilitat
   * Currently this is includes to all models implemented by the EficientNet and MobileNetv3 classes (which also includes MNasNet, MobileNetV2, MixNet and more). More soon...
 
 
-## Updates / Tasks
+## Updates
+
+### 2020-10-30
+Merged a few months of accumulated fixes and additions.
+* Proper fine-tuning compatible model init (w/ changeable # classes and proper init, demoed in train.py)
+* A new dataset interface with dataset support (via parser classes) for COCO, VOC 2007/2012, and OpenImages V5/Challenge2019
+* New focal loss def w/ label smoothing available as an option, support for jit of loss fn for (potential) speedup
+* Improved a few hot spots that squeek out a couple % of throughput gains, higher GPU utilization
+* Pascal / OpenImages evaluators based on Tensorflow Models Evaluator framework (usable for other datasets as well)
+* Support for native PyTorch DDP, SyncBN, and AMP in PyTorch >= 1.6. Still defaults to APEX if installed.
+* Allow anchor target generation to be done in either dataloader process' via collate or in model as in past. Can help balance compute.
+* Filter out unused target cls/box from dataset annotations in fixed size batch tensors before passing to target assigner. Seems to speed convergence.
+* Letterbox aware Random Erasing augmentation added.
+* A (very slow) SoftNMS impl added for inference/validation use. It can be manually enabled right now, can add arg if demand.
+* Tested with PyTorch 1.7
+* Add ResDet50 model weights, 41.6 mAP.
+
+A few things on priority list I haven't tackled yet:
+* Mosaic augmentation
+* bbox IOU loss (tried a bit but so far not a great result, need time to debug/improve)
+
+**NOTE** There are some breaking changes:
+* Predict and Train benches now output XYXY boxes, NOT XYWH as before. This was done to support other datasets as XYWH is COCO's evaluator requirement.
+* The TF Models Evaluator operates on YXYX boxes like the models. Conversion from XYXY is currently done by default. Why don't I just keep everything YXYX? Because PyTorch GPU NMS operates in XYXY.
+* You must update your version of `timm` to the latest (>=0.3), as some APIs for helpers changed a bit.
+
 ### 2020-09-03
 * All models updated to latest checkpoints from TF original.
 * Add experimental soft-nms code, must be manually enabled right now. It is REALLY slow, .1-.2 mAP increase.
@@ -54,80 +79,9 @@ Also, [Soyeb Nagori](https://github.com/soyebn) trained an EfficientDet-Lite0 co
 Unlike the other tf_ prefixed models this is not ported from (as of yet unreleased) TF official model, but it used
 TF ported weights from `timm` for the pretrained imagenet model as the backbone init, thus it uses SAME padding. 
 
-### 2020-06-12
 
-* Additional experimental model configs based on MobileNetV2, MobileNetV3, MixNet, EfficientNet-Lite. Requires
-update to `timm==0.1.28` for string based activation factory.
-* Redundant bias config handled more consistency, defaults to config unless overridden by arg
-
-### 2020-06-04
-
-Latest results in and training goal achieved. Slightly bested the TF model mAP results for D0 model.
-This model uses:
-* typical PyTorch symmetric padding (instead of TF compatible SAME)
-* my PyTorch trained EfficientNet-B0 as the pretrained starting weights (from `timm`)
-* BiFPN/Head layers without any redundant conv/BN bias layers (slightly fewer params 3877763 vs 3880067)
-
-My latest D0 run:
-```
- Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.336251
- Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.521584
- Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.356439
- Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.123988
- Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.395033
- Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.521695
-```
-
-TF ported D0 weights:
-```
- Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.335653
- Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.516253
- Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.353884
- Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.125278
- Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.386957
- Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.528071
-```
-
-Pretrained weights added for this model `efficientdet_d0`  (Tensorflow port is `tf_efficientdet_d0`)
-
-### 2020-05-27
-* A D0 result in, started before last improvements: `Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.331`
-* Another D0 and D1 running with the latest code.
-
-### 2020-05-22 / 23
-A bunch of changes:
-* COCO eval per epoch for better selection of checkpoints while training, works with distributed
-* optimizations to both train and inference that should see small throughput gains
-* doing the above, attempted to torchscript the full training loss + anchor labeler but ran into problems so had to back out part way due messy hacks or weird AMP issues causing silent bad results. Hopefully in PyTorch 1.6 there will be less TS issues.
-* updated results after clipping boxes, now pretty much exact match to official, even slightly better on a few models
-* added model factory, pretrained download, cleanup model configs
-* setup.py, pypi release
-
-### 2020-05-04
-Initial D1 training results in -- close but not quite there. Definitely in reach and better than any other non-official EfficientDet impl I've seen.
-
-Biggest missing element is proper per-epoch mAP validation for better checkpoint selection (than loss based). I was resisting doing full COCO eval because it's so slow, but may throw that in for now...
-
-D1: `Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.382`
-
-Previous D0 result: `Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.324`
-
-### 2020-05-02
-First decent MSCOCO training results (from scratch, w/ pretrained classification backbone weights as starting point). 32.4 mAP for D0. Working on improvements and D1 trials still running.
-
-### 2020-04-15
-Taking a pause on training, some high priority things came up. There are signs of life on the training branch, was working the basic augs before priority switch, loss fn appeared to be doing something sane with distributed training working, no proper eval yet, init not correct yet. I will get to it, with SOTA training config and good performance as the end goal (as with my EfficientNet work). 
-
-### 2020-04-11
-Cleanup post-processing. Less code and a five-fold throughput increase on the smaller models. D0 running > 130 img/s on a single 2080Ti, D1 > 130 img/s on dual 2080Ti up to D7 @ 8.5 img/s.
-
-### 2020-04-10
-Replace `generate_detections` with PyTorch impl using torchvision batched_nms. Significant performance increase with minor (+/-.001 mAP) score differences. Quite a bit faster than original TF impl on a GPU now.
-
-### 2020-04-09
-Initial code with working validation posted. Yes, it's a little slow, but I think faster than the official impl on a GPU if you leave AMP enabled. Post processing needs some love. 
-
-### Core Tasks
+## Tasks / TODO
+### Core
 - [x] Feature extraction from my EfficientNet implementations (https://github.com/rwightman/gen-efficientnet-pytorch or https://github.com/rwightman/pytorch-image-models)
 - [x] Low level blocks / helpers (SeparableConv, create_pool2d (same padding), etc)
 - [x] PyTorch implementation of BiFPN, BoxNet, ClassNet modules and related submodules
@@ -145,7 +99,7 @@ Initial code with working validation posted. Yes, it's a little slow, but I thin
 - [ ] Add visualization support
 - [x] Performance improvements, numpy TF detection code -> optimized PyTorch
 - [ ] Verify/fix Torchscript and ONNX export compatibility
-- [ ] Try PyTorch 1.6/1.7 w/ NHWC (channels last) order which matches TF impl
+- [x] Try PyTorch 1.6/1.7 w/ NHWC (channels last) order which matches TF impl
 
 ### Possible Future Tasks
 - [x] Basic Training (object detection) reimplementation
@@ -160,37 +114,38 @@ If you are an organization is interested in sponsoring and any of this work, or 
 
 ## Models
 
-| Variant | Download | mAP (val2017) | mAP (test-dev2017) | mAP (TF official val2017) | mAP (TF official test-dev2017) |
-| --- | --- | :---: | :---: | :---: | :---: |
-| lite0 | [tf_efficientdet_lite0.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_lite0-f5f303a9.pth) | 32.0 | TBD | N/A | N/A |
-| D0 | [efficientdet_d0.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d0_34-f153e0cf.pth) | 33.6 | TBD | 33.5 | 33.8 |
-| D0 | [tf_efficientdet_d0.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d0_34-1851dfed.pth) | 34.2 | TBD | 34.3 | 34.6 |
-| D1 | [efficientdet_d1.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/efficientdet_d1-bb7e98fe.pth) | 39.4 | 39.5 | 39.1 | 39.6 |
-| D1 | [tf_efficientdet_d1.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d1_40-a30f94af.pth) | 40.1 | TBD | 40.2 | 40.5 |
-| D2 | [tf_efficientdet_d2.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d2_43-8107aa99.pth) | 43.4 | TBD | 42.5 | 43 |
-| D3 | [tf_efficientdet_d3.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d3_47-0b525f35.pth) | 47.1 | TBD | 47.2 | 47.5 |
-| D4 | [tf_efficientdet_d4.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d4_49-f56376d9.pth) | 49.2 | TBD | 49.3 | 49.7 |
-| D5 | [tf_efficientdet_d5.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d5_51-c79f9be6.pth) | 51.2 | TBD | 51.2 | 51.5 |
-| D6 | [tf_efficientdet_d6.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d6_52-4eda3773.pth) | 52.0 | TBD | 52.1 | 52.6 |
-| D7 | [tf_efficientdet_d7.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d7_53-6d1d7a95.pth) | 53.1 | 53.4 | 53.4 | 53.7 |
-| D7X | [tf_efficientdet_d7x.pth](https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_d7x-f390b87c.pth) | 54.3 | TBD | 54.4 | 55.1 |
+| Variant | mAP (val2017) | mAP (test-dev2017) | mAP (TF official val2017) | mAP (TF official test-dev2017) |
+| --- | :---: | :---: | :---: | :---: |
+| tf_efficientdet_lite0.pth | 32.0 | TBD | N/A | N/A |
+| efficientdet_d0.pth | 33.6 | TBD | 33.5 | 33.8 |
+| tf_efficientdet_d0.pth | 34.2 | TBD | 34.3 | 34.6 |
+| efficientdet_d1.pth | 39.4 | 39.5 | 39.1 | 39.6 |
+| tf_efficientdet_d1.pth | 40.1 | TBD | 40.2 | 40.5 |
+| resdet50 | 41.6 | TBD | N/A | N/A |
+| tf_efficientdet_d2.pth | 43.4 | TBD | 42.5 | 43 |
+| tf_efficientdet_d3.pth | 47.1 | TBD | 47.2 | 47.5 |
+| tf_efficientdet_d4.pth | 49.2 | TBD | 49.3 | 49.7 |
+| tf_efficientdet_d5.pth | 51.2 | TBD | 51.2 | 51.5 |
+| tf_efficientdet_d6.pth | 52.0 | TBD | 52.1 | 52.6 |
+| tf_efficientdet_d7.pth | 53.1 | 53.4 | 53.4 | 53.7 |
+| tf_efficientdet_d7x.pth | 54.3 | TBD | 54.4 | 55.1 |
+
+See [model configurations](effdet/config/model_config.py) for model checkpoint urls and differences.
 
 _NOTE: Official scores for all modules now using soft-nms, but still using normal NMS here._
 
-## Usage
-
-### Environment Setup
+## Environment Setup
 
 Tested in a Python 3.7 or 3.8 conda environment in Linux with:
-* PyTorch 1.4 or PyTorch 1.6 (I recommend avoiding PyTorch 1.5 due to some jit and argmax issues)
-* PyTorch Image Models (timm) >= 0.1.28, `pip install timm` or local install from (https://github.com/rwightman/pytorch-image-models) 
-* Apex AMP master (as of 2020-04)
+* PyTorch 1.4, 1.6, or 1.7 (I recommend avoiding PyTorch 1.5 due to some jit and argmax issues)
+* PyTorch Image Models (timm) >= 0.3.0, `pip install timm` or local install from (https://github.com/rwightman/pytorch-image-models)
+* Apex AMP master (as of 2020-08)
 
-*NOTE* - There is a conflict/bug with Numpy 1.18+ and pycocotools, force install numpy <= 1.17.5 or the coco eval will fail,
-the validation script will still save the output JSON and that can be run through eval again later. 
+*NOTE* - There is a conflict/bug with Numpy 1.18+ and pycocotools 2.0, force install numpy <= 1.17.5 or ensure you install pycocotools >= 2.0.2
 
-### Dataset Setup
+## Dataset Setup and Use
 
+### COCO
 MSCOCO 2017 validation data:
 ```
 wget http://images.cocodataset.org/zips/val2017.zip
@@ -207,20 +162,16 @@ wget http://images.cocodataset.org/annotations/image_info_test2017.zip
 unzip image_info_test2017.zip
 ```
 
-### Run COCO Evaluation
+#### COCO Evaluation
 
-Run validation (val2017 by default) with D2 model: `python validation.py /localtion/of/mscoco/ --model tf_efficientdet_d2 --checkpoint tf_efficientdet_d2.pth`
+Run validation (val2017 by default) with D2 model: `python validate.py /localtion/of/mscoco/ --model tf_efficientdet_d2`
 
 
-Run test-dev2017: `python validation.py /localtion/of/mscoco/ --model tf_efficientdet_d2 --checkpoint tf_efficientdet_d2.pth --anno test-dev2017`
+Run test-dev2017: `python validate.py /localtion/of/mscoco/ --model tf_efficientdet_d2 --split testdev`
 
-### Run Inference
+#### COCO Training
 
-TODO: Need an inference script
-
-### Run Training
-
-`./distributed_train.sh 2 /mscoco --model tf_efficientdet_d0 -b 16 --amp  --lr .04 --warmup-epochs 5  --sync-bn --opt fusedmomentum --fill-color mean --model-ema`
+`./distributed_train.sh 4 /mscoco --model tf_efficientdet_d0 -b 16 --amp  --lr .09 --warmup-epochs 5  --sync-bn --opt fusedmomentum --model-ema`
 
 NOTE:
 * Training script currently defaults to a model that does NOT have redundant conv + BN bias layers like the official models, set correct flag when validating.
@@ -228,10 +179,84 @@ NOTE:
 * The official training code uses EMA weight averaging by default, it's not clear there is a point in doing this with the cosine LR schedule, I find the non-EMA weights end up better than EMA in the last 10-20% of training epochs 
 * The default h-params is a very close to unstable (exploding loss), don't try using Nesterov momentum. Try to keep the batch size up, use sync-bn.
 
-### Examples of Training / Fine-Tuning on Alternate Datasets
 
-* Alex Shonenkov has a clear and concise Kaggle kernel which illustrates fine-tuning these models for detecting wheat heads: https://www.kaggle.com/shonenkov/training-efficientdet
-* If you have a good example script or kernel training these models with a different dataset, feel free to notify me for inclusion here...
+### Pascal VOC
+
+2007, 2012, and combined 2007 + 2012 w/ labeled 2007 test for validation are supported.
+
+```
+wget http://host.robots.ox.ac.uk/pascal/VOC/voc2012/VOCtrainval_11-May-2012.tar
+wget http://host.robots.ox.ac.uk/pascal/VOC/voc2007/VOCtrainval_06-Nov-2007.tar
+wget http://host.robots.ox.ac.uk/pascal/VOC/voc2007/VOCtest_06-Nov-2007.tar
+find . -name '*.tar' -exec tar xf {} \;
+```
+
+There should be a `VOC2007` and `VOC2012` folder within `VOCdevkit`, dataset root for cmd line will be VOCdevkit.
+
+Alternative download links, slower but up more often than ox.ac.uk:
+```
+http://pjreddie.com/media/files/VOCtrainval_11-May-2012.tar
+http://pjreddie.com/media/files/VOCtrainval_06-Nov-2007.tar
+http://pjreddie.com/media/files/VOCtest_06-Nov-2007.tar
+```
+
+#### VOC Evaluation
+
+Evaluate on VOC2012 validation set:
+`python validate.py /data/VOCdevkit --model efficientdet_d0 --num-gpu 2 --dataset voc2007 --checkpoint mychekpoint.pth --num-classes 20`
+
+#### VOC Training
+
+Fine tune COCO pretrained weights to VOC 2007 + 2012:
+`/distributed_train.sh 4 /data/VOCdevkit --model efficientdet_d0 --dataset voc0712 -b 16 --amp --lr .008 --sync-bn --opt fusedmomentum --warmup-epochs 3 --model-ema --model-ema-decay 0.9966 --epochs 150 --num-classes 20 --pretrained`
+
+### OpenImages
+
+Setting up OpenImages dataset is a commitment. I've tried to make it a bit easier wrt to the annotations, but grabbing the dataset is still going to take some time. It will take approx 560GB of storage space.
+
+To download the image data, I prefer the CVDF packaging. The main OpenImages dataset page, annotations, dataset license info can be found at: https://storage.googleapis.com/openimages/web/index.html
+
+#### CVDF Images Download
+
+Follow the s3 download directions here: https://github.com/cvdfoundation/open-images-dataset#download-images-with-bounding-boxes-annotations
+
+Each `train_<x>.tar.gz` should be extracted to `train/<x>` folder, where x is a hex digit from 0-F. `validation.tar.gz` can be extracted as flat files into `validation/`.
+
+#### Annotations Download
+
+Annotations can be downloaded separately from the OpenImages home page above. For convenience, I've packaged them all together with some additional 'info' csv files that contain ids and stats for all image files. My datasets rely on the `<set>-info.csv` files. Please see https://storage.googleapis.com/openimages/web/factsfigures.html for the License of these annotations. The annotations are licensed by Google LLC under CC BY 4.0 license. The images are listed as having a CC BY 2.0 license.
+```
+wget https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1-anno/openimages-annotations.tar.bz2
+wget https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1-anno/openimages-annotations-challenge-2019.tar.bz2
+find . -name '*.tar.bz2' -exec tar xf {} \;
+```
+
+#### Layout
+
+Once everything is downloaded and extracted the root of your openimages data folder should contain:
+```
+annotations/<csv anno for openimages v5/v6>
+annotations/challenge-2019/<csv anno for challenge2019>
+train/0/<all the image files starting with '0'>
+.
+.
+.
+train/f/<all the image files starting with 'f'>
+validation/<all the image files in same folder>
+```
+
+#### OpenImages Training
+Training with Challenge2019 annotations (500 classes):
+`./distributed_train.sh 4 /data/openimages --model efficientdet_d0 --dataset openimages-challenge2019 -b 7 --amp --lr .042 --sync-bn --opt fusedmomentum --warmup-epochs 1 --lr-noise 0.4 0.9 --model-ema --model-ema-decay 0.999966 --epochs 100 --remode pixel --reprob 0.15 --recount 4 --num-classes 500 --val-skip 2`
+
+### Examples of Training / Fine-Tuning on Custom Datasets
+
+The models here have been used with custom training routines and datasets with great results. There are lots of details to figure out so please don't file any 'I get crap results on my custom dataset issues'. If you can illustrate a reproducible problem on a public, non-proprietary, downloadable dataset, with public github fork of this repo including working dataset/parser implementations, I MAY have time to take a look.
+
+Examples:
+* Alex Shonenkov has a clear and concise Kaggle kernel which illustrates fine-tuning these models for detecting wheat heads: https://www.kaggle.com/shonenkov/training-efficientdet (this is out of date wrt to latest versions here)
+
+If you have a good example script or kernel training these models with a different dataset, feel free to notify me for inclusion here...
 
 ## Results
 

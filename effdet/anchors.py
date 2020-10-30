@@ -208,9 +208,8 @@ class Anchors(nn.Module):
             anchor_scale: float number representing the scale of size of the base
                 anchor to the feature stride 2^level.
 
-            image_size: integer number of input image size. The input image has the
-                same dimension for width and height. The image_size should be divided by
-                the largest feature stride 2^max_level.
+            image_size: Sequence specifying input image size of model (H, W).
+                The image_size should be divided by the largest feature stride 2^max_level.
         """
         super(Anchors, self).__init__()
         self.min_level = min_level
