@@ -43,6 +43,10 @@ A few things on priority list I haven't tackled yet:
 * The TF Models Evaluator operates on YXYX boxes like the models. Conversion from XYXY is currently done by default. Why don't I just keep everything YXYX? Because PyTorch GPU NMS operates in XYXY.
 * You must update your version of `timm` to the latest (>=0.3), as some APIs for helpers changed a bit.
 
+Training sanity checks were done on VOC and OI
+  * 80.0 @ 50 mAP finetune on voc0712 with no attempt to tune params (roughly as per command below)
+  * 18.0 mAP @ 50 for OI Challenge2019 after couple days of training (only 6 epochs, eek!). It's much bigger, and takes a LOONG time, many classes are quite challenging.
+  
 ### 2020-09-03
 * All models updated to latest checkpoints from TF original.
 * Add experimental soft-nms code, must be manually enabled right now. It is REALLY slow, .1-.2 mAP increase.
@@ -249,6 +253,8 @@ validation/<all the image files in same folder>
 #### OpenImages Training
 Training with Challenge2019 annotations (500 classes):
 `./distributed_train.sh 4 /data/openimages --model efficientdet_d0 --dataset openimages-challenge2019 -b 7 --amp --lr .042 --sync-bn --opt fusedmomentum --warmup-epochs 1 --lr-noise 0.4 0.9 --model-ema --model-ema-decay 0.999966 --epochs 100 --remode pixel --reprob 0.15 --recount 4 --num-classes 500 --val-skip 2`
+
+The 500 (Challenge2019) or 601 (V5/V6) class head for OI takes up a LOT more GPU memory vs COCO. You'll likely need to half batch sizes.
 
 ### Examples of Training / Fine-Tuning on Custom Datasets
 
