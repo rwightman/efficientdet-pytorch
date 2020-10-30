@@ -4,25 +4,30 @@
 Hacked together by Ross Wightman (https://github.com/rwightman)
 """
 import argparse
-import os
-import json
 import time
-import logging
 import torch
 import torch.nn.parallel
-try:
-    from apex import amp
-    has_amp = True
-except ImportError:
-    has_amp = False
+from contextlib import suppress
 
-from effdet import create_model
-from data import create_loader, CocoDetection
+from effdet import create_model, create_evaluator, create_dataset, create_loader
+from effdet.data import resolve_input_config
+from effdet.evaluator import CocoEvaluator, PascalEvaluator
 from timm.utils import AverageMeter, setup_default_logging
 
-from pycocotools.coco import COCO
-from pycocotools.cocoeval import COCOeval
 
+has_apex = False
+try:
+    from apex import amp
+    has_apex = True
+except ImportError:
+    pass
+
+has_native_amp = False
+try:
+    if getattr(torch.cuda.amp, 'autocast') is not None:
+        has_native_amp = True
+except AttributeError:
+    pass
 
 torch.backends.cudnn.benchmark = True
 
@@ -36,14 +41,18 @@ def add_bool_arg(parser, name, default=False, help=''):  # FIXME move to utils
 
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Validation')
-parser.add_argument('data', metavar='DIR',
-                    help='path to dataset')
-parser.add_argument('--anno', default='val2017',
-                    help='mscoco annotation set (one of val2017, train2017, test-dev2017)')
+parser.add_argument('root', metavar='DIR',
+                    help='path to dataset root')
+parser.add_argument('--dataset', default='coco', type=str, metavar='DATASET',
+                    help='Name of dataset (default: "coco"')
+parser.add_argument('--split', default='val',
+                    help='validation split')
 parser.add_argument('--model', '-m', metavar='MODEL', default='tf_efficientdet_d1',
                     help='model architecture (default: tf_efficientdet_d1)')
 add_bool_arg(parser, 'redundant-bias', default=None,
                     help='override model config for redundant bias layers')
+parser.add_argument('--num-classes', type=int, default=None, metavar='N',
+                    help='Override num_classes in model config if set. For fine-tuning from pretrained.')
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
 parser.add_argument('-b', '--batch-size', default=128, type=int,
@@ -56,7 +65,7 @@ parser.add_argument('--std', type=float,  nargs='+', default=None, metavar='STD'
                     help='Override std deviation of of dataset')
 parser.add_argument('--interpolation', default='bilinear', type=str, metavar='NAME',
                     help='Image resize interpolation type (overrides model)')
-parser.add_argument('--fill-color', default='mean', type=str, metavar='NAME',
+parser.add_argument('--fill-color', default=None, type=str, metavar='NAME',
                     help='Image augmentation fill (background) color ("mean" or int)')
 parser.add_argument('--log-freq', default=10, type=int,
                     metavar='N', help='batch logging frequency (default: 10)')
@@ -72,6 +81,12 @@ parser.add_argument('--pin-mem', action='store_true', default=False,
                     help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
 parser.add_argument('--use-ema', dest='use_ema', action='store_true',
                     help='use ema version of weights if present')
+parser.add_argument('--amp', action='store_true', default=False,
+                    help='Use AMP mixed precision. Defaults to Apex, fallback to native Torch AMP.')
+parser.add_argument('--apex-amp', action='store_true', default=False,
+                    help='Use NVIDIA Apex AMP mixed precision')
+parser.add_argument('--native-amp', action='store_true', default=False,
+                    help='Use Native Torch AMP mixed precision')
 parser.add_argument('--torchscript', dest='torchscript', action='store_true',
                     help='convert model torchscript for inference')
 parser.add_argument('--results', default='./results.json', type=str, metavar='FILENAME',
@@ -81,100 +96,90 @@ parser.add_argument('--results', default='./results.json', type=str, metavar='FI
 def validate(args):
     setup_default_logging()
 
-    # might as well try to validate something
-    args.pretrained = args.pretrained or not args.checkpoint
+    if args.amp:
+        if has_apex:
+            args.apex_amp = True
+        elif has_native_amp:
+            args.native_amp = True
+    assert not args.apex_amp or not args.native_amp, "Only one AMP mode should be set."
+    args.pretrained = args.pretrained or not args.checkpoint  # might as well try to validate something
     args.prefetcher = not args.no_prefetcher
 
     # create model
     bench = create_model(
         args.model,
         bench_task='predict',
+        num_classes=args.num_classes,
         pretrained=args.pretrained,
         redundant_bias=args.redundant_bias,
         checkpoint_path=args.checkpoint,
         checkpoint_ema=args.use_ema,
     )
-    input_size = bench.config.image_size
+    model_config = bench.config
 
     param_count = sum([m.numel() for m in bench.parameters()])
     print('Model %s created, param count: %d' % (args.model, param_count))
 
     bench = bench.cuda()
-    if has_amp:
-        print('Using AMP mixed precision.')
+
+    amp_autocast = suppress
+    if args.apex_amp:
         bench = amp.initialize(bench, opt_level='O1')
+        print('Using NVIDIA APEX AMP. Validating in mixed precision.')
+    elif args.native_amp:
+        amp_autocast = torch.cuda.amp.autocast
+        print('Using native Torch AMP. Validating in mixed precision.')
     else:
-        print('AMP not installed, running network in FP32.')
+        print('AMP not enabled. Validating in float32.')
 
     if args.num_gpu > 1:
         bench = torch.nn.DataParallel(bench, device_ids=list(range(args.num_gpu)))
 
-    if 'test' in args.anno:
-        annotation_path = os.path.join(args.data, 'annotations', f'image_info_{args.anno}.json')
-        image_dir = 'test2017'
-    else:
-        annotation_path = os.path.join(args.data, 'annotations', f'instances_{args.anno}.json')
-        image_dir = args.anno
-    dataset = CocoDetection(os.path.join(args.data, image_dir), annotation_path)
-
+    dataset = create_dataset(args.dataset, args.root, args.split)
+    input_config = resolve_input_config(args, model_config)
     loader = create_loader(
         dataset,
-        input_size=input_size,
+        input_size=input_config['input_size'],
         batch_size=args.batch_size,
         use_prefetcher=args.prefetcher,
-        interpolation=args.interpolation,
-        fill_color=args.fill_color,
+        interpolation=input_config['interpolation'],
+        fill_color=input_config['fill_color'],
+        mean=input_config['mean'],
+        std=input_config['std'],
         num_workers=args.workers,
         pin_mem=args.pin_mem)
 
-    img_ids = []
-    results = []
+    evaluator = create_evaluator(args.dataset, dataset, pred_yxyx=False)
     bench.eval()
     batch_time = AverageMeter()
     end = time.time()
+    last_idx = len(loader) - 1
     with torch.no_grad():
         for i, (input, target) in enumerate(loader):
-            output = bench(input, target['img_scale'], target['img_size'])
-            output = output.cpu()
-            sample_ids = target['img_id'].cpu()
-            for index, sample in enumerate(output):
-                image_id = int(sample_ids[index])
-                for det in sample:
-                    score = float(det[4])
-                    if score < .001:  # stop when below this threshold, scores in descending order
-                        break
-                    coco_det = dict(
-                        image_id=image_id,
-                        bbox=det[0:4].tolist(),
-                        score=score,
-                        category_id=int(det[5]))
-                    img_ids.append(image_id)
-                    results.append(coco_det)
+            with amp_autocast():
+                output = bench(input, img_info=target)
+            evaluator.add_predictions(output, target)
 
             # measure elapsed time
             batch_time.update(time.time() - end)
             end = time.time()
 
-            if i % args.log_freq == 0:
+            if i % args.log_freq == 0 or i == last_idx:
                 print(
                     'Test: [{0:>4d}/{1}]  '
                     'Time: {batch_time.val:.3f}s ({batch_time.avg:.3f}s, {rate_avg:>7.2f}/s)  '
                     .format(
                         i, len(loader), batch_time=batch_time,
-                        rate_avg=input.size(0) / batch_time.avg,
-                     )
+                        rate_avg=input.size(0) / batch_time.avg)
                 )
 
-    json.dump(results, open(args.results, 'w'), indent=4)
-    if 'test' not in args.anno:
-        coco_results = dataset.coco.loadRes(args.results)
-        coco_eval = COCOeval(dataset.coco, coco_results, 'bbox')
-        coco_eval.params.imgIds = img_ids  # score only ids we've used
-        coco_eval.evaluate()
-        coco_eval.accumulate()
-        coco_eval.summarize()
+    mean_ap = 0.
+    if dataset.parser.has_labels:
+        mean_ap = evaluator.evaluate()
+    else:
+        evaluator.save(args.results)
 
-    return results
+    return mean_ap
 
 
 def main():

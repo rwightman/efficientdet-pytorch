@@ -24,12 +24,14 @@ Hacked together by Ross Wightman, original copyright below
 This module is borrowed from TPU RetinaNet implementation:
 https://github.com/tensorflow/tpu/blob/master/models/official/retinanet/anchors.py
 """
-from typing import Optional
+from typing import Optional, Tuple, Sequence
 
 import numpy as np
 import torch
 import torch.nn as nn
+#import torchvision.ops.boxes as tvb
 from torchvision.ops.boxes import batched_nms, remove_small_boxes
+from typing import List
 
 from effdet.object_detection import ArgMaxMatcher, FasterRcnnBoxCoder, BoxList, IouSimilarity, TargetAssigner
 from .soft_nms import batched_soft_nms
@@ -85,83 +87,6 @@ def decode_box_outputs(rel_codes, anchors, output_xyxy: bool=False):
     return out
 
 
-def _generate_anchor_configs(min_level, max_level, num_scales, aspect_ratios):
-    """Generates mapping from output level to a list of anchor configurations.
-
-    A configuration is a tuple of (num_anchors, scale, aspect_ratio).
-
-    Args:
-        min_level: integer number of minimum level of the output feature pyramid.
-
-        max_level: integer number of maximum level of the output feature pyramid.
-
-        num_scales: integer number representing intermediate scales added on each level.
-            For instances, num_scales=2 adds two additional anchor scales [2^0, 2^0.5] on each level.
-
-        aspect_ratios: list of tuples representing the aspect ratio anchors added on each level.
-            For instances, aspect_ratios = [(1, 1), (1.4, 0.7), (0.7, 1.4)] adds three anchors on each level.
-
-    Returns:
-        anchor_configs: a dictionary with keys as the levels of anchors and
-            values as a list of anchor configuration.
-    """
-    anchor_configs = {}
-    for level in range(min_level, max_level + 1):
-        anchor_configs[level] = []
-        for scale_octave in range(num_scales):
-            for aspect in aspect_ratios:
-                anchor_configs[level].append((2 ** level, scale_octave / float(num_scales), aspect))
-    return anchor_configs
-
-
-def _generate_anchor_boxes(image_size, anchor_scale, anchor_configs):
-    """Generates multiscale anchor boxes.
-
-    Args:
-        image_size: integer number of input image size. The input image has the same dimension for
-            width and height. The image_size should be divided by the largest feature stride 2^max_level.
-
-        anchor_scale: float number representing the scale of size of the base
-            anchor to the feature stride 2^level.
-
-        anchor_configs: a dictionary with keys as the levels of anchors and
-            values as a list of anchor configuration.
-
-    Returns:
-        anchor_boxes: a numpy array with shape [N, 4], which stacks anchors on all feature levels.
-
-    Raises:
-        ValueError: input size must be the multiple of largest feature stride.
-    """
-    boxes_all = []
-    for _, configs in anchor_configs.items():
-        boxes_level = []
-        for config in configs:
-            stride, octave_scale, aspect = config
-            if image_size % stride != 0:
-                raise ValueError("input size must be divided by the stride.")
-            base_anchor_size = anchor_scale * stride * 2 ** octave_scale
-            anchor_size_x_2 = base_anchor_size * aspect[0] / 2.0
-            anchor_size_y_2 = base_anchor_size * aspect[1] / 2.0
-
-            x = np.arange(stride / 2, image_size, stride)
-            y = np.arange(stride / 2, image_size, stride)
-            xv, yv = np.meshgrid(x, y)
-            xv = xv.reshape(-1)
-            yv = yv.reshape(-1)
-
-            boxes = np.vstack((yv - anchor_size_y_2, xv - anchor_size_x_2,
-                               yv + anchor_size_y_2, xv + anchor_size_x_2))
-            boxes = np.swapaxes(boxes, 0, 1)
-            boxes_level.append(np.expand_dims(boxes, axis=1))
-        # concat anchors on the same level to the reshape NxAx4
-        boxes_level = np.concatenate(boxes_level, axis=1)
-        boxes_all.append(boxes_level.reshape([-1, 4]))
-
-    anchor_boxes = np.vstack(boxes_all)
-    return anchor_boxes
-
-
 def clip_boxes_xyxy(boxes: torch.Tensor, size: torch.Tensor):
     boxes = boxes.clamp(min=0)
     size = torch.cat([size, size], dim=0)
@@ -208,7 +133,8 @@ def generate_detections(
 
     anchor_boxes = anchor_boxes[indices, :]
 
-    # apply bounding box regression to anchors
+    # Appply bounding box regression to anchors, boxes are converted to xyxy
+    # here since PyTorch NMS expects them in that form.
     boxes = decode_box_outputs(box_outputs.float(), anchor_boxes, output_xyxy=True)
     if img_scale is not None and img_size is not None:
         boxes = clip_boxes_xyxy(boxes, img_size / img_scale)  # clip before NMS better?
@@ -225,31 +151,45 @@ def generate_detections(
     top_detection_idx = top_detection_idx[:max_det_per_image]
     boxes = boxes[top_detection_idx]
     scores = scores[top_detection_idx, None]
-    classes = classes[top_detection_idx, None]
+    classes = classes[top_detection_idx, None] + 1  # back to class idx with background class = 0
 
-    # xyxy to xywh & rescale to original image
-    boxes[:, 2] -= boxes[:, 0]
-    boxes[:, 3] -= boxes[:, 1]
     if img_scale is not None:
-        boxes *= img_scale
+        boxes = boxes * img_scale
 
-    classes += 1  # back to class idx with background class = 0
+    # FIXME add option to convert boxes back to yxyx? Otherwise must be handled downstream if
+    # that is the preferred output format.
 
     # stack em and pad out to MAX_DETECTIONS_PER_IMAGE if necessary
+    num_det = len(top_detection_idx)
     detections = torch.cat([boxes, scores, classes.float()], dim=1)
-    if len(top_detection_idx) < max_det_per_image:
+    if num_det < max_det_per_image:
         detections = torch.cat([
             detections,
-            torch.zeros(
-                (max_det_per_image - len(top_detection_idx), 6), device=detections.device, dtype=detections.dtype)
+            torch.zeros((max_det_per_image - num_det, 6), device=detections.device, dtype=detections.dtype)
         ], dim=0)
     return detections
+
+
+def get_feat_sizes(image_size: Tuple[int, int], max_level: int):
+    """Get feat widths and heights for all levels.
+    Args:
+      image_size: a tuple (H, W)
+      max_level: maximum feature level.
+    Returns:
+      feat_sizes: a list of tuples (height, width) for each level.
+    """
+    feat_size = image_size
+    feat_sizes = [feat_size]
+    for _ in range(1, max_level + 1):
+        feat_size = ((feat_size[0] - 1) // 2 + 1, (feat_size[1] - 1) // 2 + 1)
+        feat_sizes.append(feat_size)
+    return feat_sizes
 
 
 class Anchors(nn.Module):
     """RetinaNet Anchors class."""
 
-    def __init__(self, min_level, max_level, num_scales, aspect_ratios, anchor_scale, image_size):
+    def __init__(self, min_level, max_level, num_scales, aspect_ratios, anchor_scale, image_size: Tuple[int, int]):
         """Constructs multiscale RetinaNet anchors.
 
         Args:
@@ -268,35 +208,92 @@ class Anchors(nn.Module):
             anchor_scale: float number representing the scale of size of the base
                 anchor to the feature stride 2^level.
 
-            image_size: integer number of input image size. The input image has the
-                same dimension for width and height. The image_size should be divided by
-                the largest feature stride 2^max_level.
+            image_size: Sequence specifying input image size of model (H, W).
+                The image_size should be divided by the largest feature stride 2^max_level.
         """
         super(Anchors, self).__init__()
         self.min_level = min_level
         self.max_level = max_level
         self.num_scales = num_scales
         self.aspect_ratios = aspect_ratios
-        self.anchor_scale = anchor_scale
-        self.image_size = image_size
+        if isinstance(anchor_scale, Sequence):
+            assert len(anchor_scale) == max_level - min_level + 1
+            self.anchor_scales = anchor_scale
+        else:
+            self.anchor_scales = [anchor_scale] * (max_level - min_level + 1)
+
+        assert isinstance(image_size, Sequence) and len(image_size) == 2
+        # FIXME this restriction can likely be relaxed with some additional changes
+        assert image_size[0] % 2 ** max_level == 0, 'Image size must be divisible by 2 ** max_level (128)'
+        assert image_size[1] % 2 ** max_level == 0, 'Image size must be divisible by 2 ** max_level (128)'
+        self.image_size = tuple(image_size)
+        self.feat_sizes = get_feat_sizes(image_size, max_level)
         self.config = self._generate_configs()
         self.register_buffer('boxes', self._generate_boxes())
 
+    @classmethod
+    def from_config(cls, config):
+        return cls(
+            config.min_level, config.max_level,
+            config.num_scales, config.aspect_ratios,
+            config.anchor_scale, config.image_size)
+
     def _generate_configs(self):
         """Generate configurations of anchor boxes."""
-        return _generate_anchor_configs(self.min_level, self.max_level, self.num_scales, self.aspect_ratios)
+        anchor_configs = {}
+        feat_sizes = self.feat_sizes
+        for level in range(self.min_level, self.max_level + 1):
+            anchor_configs[level] = []
+            for scale_octave in range(self.num_scales):
+                for aspect in self.aspect_ratios:
+                    anchor_configs[level].append(
+                        ((feat_sizes[0][0] // feat_sizes[level][0],
+                          feat_sizes[0][1] // feat_sizes[level][1]),
+                         scale_octave / float(self.num_scales), aspect,
+                         self.anchor_scales[level - self.min_level]))
+        return anchor_configs
 
     def _generate_boxes(self):
         """Generates multiscale anchor boxes."""
-        boxes = _generate_anchor_boxes(self.image_size, self.anchor_scale, self.config)
-        boxes = torch.from_numpy(boxes).float()
-        return boxes
+        boxes_all = []
+        for _, configs in self.config.items():
+            boxes_level = []
+            for config in configs:
+                stride, octave_scale, aspect, anchor_scale = config
+                base_anchor_size_x = anchor_scale * stride[1] * 2 ** octave_scale
+                base_anchor_size_y = anchor_scale * stride[0] * 2 ** octave_scale
+                if isinstance(aspect, Sequence):
+                    aspect_x = aspect[0]
+                    aspect_y = aspect[1]
+                else:
+                    aspect_x = np.sqrt(aspect)
+                    aspect_y = 1.0 / aspect_x
+                anchor_size_x_2 = base_anchor_size_x * aspect_x / 2.0
+                anchor_size_y_2 = base_anchor_size_y * aspect_y / 2.0
+
+                x = np.arange(stride[1] / 2, self.image_size[1], stride[1])
+                y = np.arange(stride[0] / 2, self.image_size[0], stride[0])
+                xv, yv = np.meshgrid(x, y)
+                xv = xv.reshape(-1)
+                yv = yv.reshape(-1)
+
+                boxes = np.vstack((yv - anchor_size_y_2, xv - anchor_size_x_2,
+                                   yv + anchor_size_y_2, xv + anchor_size_x_2))
+                boxes = np.swapaxes(boxes, 0, 1)
+                boxes_level.append(np.expand_dims(boxes, axis=1))
+
+            # concat anchors on the same level to the reshape NxAx4
+            boxes_level = np.concatenate(boxes_level, axis=1)
+            boxes_all.append(boxes_level.reshape([-1, 4]))
+
+        anchor_boxes = np.vstack(boxes_all)
+        anchor_boxes = torch.from_numpy(anchor_boxes).float()
+        return anchor_boxes
 
     def get_anchors_per_location(self):
         return self.num_scales * len(self.aspect_ratios)
 
 
-#@torch.jit.script
 class AnchorLabeler(object):
     """Labeler for multiscale anchor boxes.
     """
@@ -324,19 +321,18 @@ class AnchorLabeler(object):
         self.anchors = anchors
         self.match_threshold = match_threshold
         self.num_classes = num_classes
-        self.feat_size = {}
-        for level in range(self.anchors.min_level, self.anchors.max_level + 1):
-            self.feat_size[level] = int(self.anchors.image_size / 2 ** level)
         self.indices_cache = {}
 
-    def label_anchors(self, gt_boxes, gt_labels):
+    def label_anchors(self, gt_boxes, gt_classes, filter_valid=True):
         """Labels anchors with ground truth inputs.
 
         Args:
             gt_boxes: A float tensor with shape [N, 4] representing groundtruth boxes.
                 For each row, it stores [y0, x0, y1, x1] for four corners of a box.
 
-            gt_labels: A integer tensor with shape [N, 1] representing groundtruth classes.
+            gt_classes: A integer tensor with shape [N, 1] representing groundtruth classes.
+
+            filter_valid: Filter out any boxes w/ gt class <= -1 before assigning
 
         Returns:
             cls_targets_dict: ordered dictionary with keys [min_level, min_level+1, ..., max_level].
@@ -352,83 +348,72 @@ class AnchorLabeler(object):
         cls_targets_out = []
         box_targets_out = []
 
-        gt_box_list = BoxList(gt_boxes)
-        anchor_box_list = BoxList(self.anchors.boxes)
+        if filter_valid:
+            valid_idx = gt_classes > -1  # filter gt targets w/ label <= -1
+            gt_boxes = gt_boxes[valid_idx]
+            gt_classes = gt_classes[valid_idx]
 
-        # cls_weights, box_weights are not used
-        cls_targets, _, box_targets, _, matches = self.target_assigner.assign(anchor_box_list, gt_box_list, gt_labels)
+        cls_targets, box_targets, matches = self.target_assigner.assign(
+            BoxList(self.anchors.boxes), BoxList(gt_boxes), gt_classes)
 
         # class labels start from 1 and the background class = -1
-        cls_targets -= 1
-        cls_targets = cls_targets.long()
+        cls_targets = (cls_targets - 1).long()
 
         # Unpack labels.
         """Unpacks an array of cls/box into multiple scales."""
         count = 0
         for level in range(self.anchors.min_level, self.anchors.max_level + 1):
-            feat_size = self.feat_size[level]
-            steps = feat_size ** 2 * self.anchors.get_anchors_per_location()
-            indices = torch.arange(count, count + steps, device=cls_targets.device)
+            feat_size = self.anchors.feat_sizes[level]
+            steps = feat_size[0] * feat_size[1] * self.anchors.get_anchors_per_location()
+            cls_targets_out.append(cls_targets[count:count + steps].view([feat_size[0], feat_size[1], -1]))
+            box_targets_out.append(box_targets[count:count + steps].view([feat_size[0], feat_size[1], -1]))
             count += steps
-            cls_targets_out.append(
-                torch.index_select(cls_targets, 0, indices).view([feat_size, feat_size, -1]))
-            box_targets_out.append(
-                torch.index_select(box_targets, 0, indices).view([feat_size, feat_size, -1]))
 
-        num_positives = (matches.match_results != -1).float().sum()
+        num_positives = (matches.match_results > -1).float().sum()
 
         return cls_targets_out, box_targets_out, num_positives
 
-    def _build_indices(self, device):
-        anchors_per_loc = self.anchors.get_anchors_per_location()
-        indices_dict = {}
-        count = 0
-        for level in range(self.anchors.min_level, self.anchors.max_level + 1):
-            feat_size = self.feat_size[level]
-            steps = feat_size ** 2 * anchors_per_loc
-            indices = torch.arange(count, count + steps, device=device)
-            indices_dict[level] = indices
-            count += steps
-        return indices_dict
-
-    def _get_indices(self, device, level):
-        if device not in self.indices_cache:
-            self.indices_cache[device] = self._build_indices(device)
-        return self.indices_cache[device][level]
-
-    def batch_label_anchors(self, batch_size: int, gt_boxes, gt_classes):
+    def batch_label_anchors(self, gt_boxes, gt_classes, filter_valid=True):
+        batch_size = len(gt_boxes)
+        assert batch_size == len(gt_classes)
         num_levels = self.anchors.max_level - self.anchors.min_level + 1
         cls_targets_out = [[] for _ in range(num_levels)]
         box_targets_out = [[] for _ in range(num_levels)]
         num_positives_out = []
 
-        # FIXME this may be a bottleneck, would be faster if batched, or should be done in loader/dataset?
         anchor_box_list = BoxList(self.anchors.boxes)
         for i in range(batch_size):
             last_sample = i == batch_size - 1
-            # cls_weights, box_weights are not used
-            cls_targets, _, box_targets, _, matches = self.target_assigner.assign(
-                anchor_box_list, BoxList(gt_boxes[i]), gt_classes[i])
+
+            if filter_valid:
+                valid_idx = gt_classes[i] > -1  # filter gt targets w/ label <= -1
+                gt_box_list = BoxList(gt_boxes[i][valid_idx])
+                gt_class_i = gt_classes[i][valid_idx]
+            else:
+                gt_box_list = BoxList(gt_boxes[i])
+                gt_class_i = gt_classes[i]
+            cls_targets, box_targets, matches = self.target_assigner.assign(anchor_box_list, gt_box_list, gt_class_i)
 
             # class labels start from 1 and the background class = -1
-            cls_targets -= 1
-            cls_targets = cls_targets.long()
+            cls_targets = (cls_targets - 1).long()
 
             # Unpack labels.
             """Unpacks an array of cls/box into multiple scales."""
+            count = 0
             for level in range(self.anchors.min_level, self.anchors.max_level + 1):
-                level_index = level - self.anchors.min_level
-                feat_size = self.feat_size[level]
-                indices = self._get_indices(cls_targets.device, level)
-                cls_targets_out[level_index].append(
-                    torch.index_select(cls_targets, 0, indices).view([feat_size, feat_size, -1]))
-                box_targets_out[level_index].append(
-                    torch.index_select(box_targets, 0, indices).view([feat_size, feat_size, -1]))
+                level_idx = level - self.anchors.min_level
+                feat_size = self.anchors.feat_sizes[level]
+                steps = feat_size[0] * feat_size[1] * self.anchors.get_anchors_per_location()
+                cls_targets_out[level_idx].append(
+                    cls_targets[count:count + steps].view([feat_size[0], feat_size[1], -1]))
+                box_targets_out[level_idx].append(
+                    box_targets[count:count + steps].view([feat_size[0], feat_size[1], -1]))
+                count += steps
                 if last_sample:
-                    cls_targets_out[level_index] = torch.stack(cls_targets_out[level_index])
-                    box_targets_out[level_index] = torch.stack(box_targets_out[level_index])
+                    cls_targets_out[level_idx] = torch.stack(cls_targets_out[level_idx])
+                    box_targets_out[level_idx] = torch.stack(box_targets_out[level_idx])
 
-            num_positives_out.append((matches.match_results != -1).float().sum())
+            num_positives_out.append((matches.match_results > -1).float().sum())
             if last_sample:
                 num_positives_out = torch.stack(num_positives_out)
 

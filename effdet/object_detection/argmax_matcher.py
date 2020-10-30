@@ -26,9 +26,14 @@ Note: matchers are used in TargetAssigners. There is a create_target_assigner
 factory function for popular implementations.
 """
 import torch
-from torch.nn.functional import one_hot
 from .matcher import Match
 from typing import Optional
+
+
+def one_hot_bool(x, num_classes: int):
+    # for improved perf over PyTorch builtin one_hot, scatter to bool
+    onehot = torch.zeros(x.size(0), num_classes, device=x.device, dtype=torch.bool)
+    return onehot.scatter_(1, x.unsqueeze(1), 1)
 
 
 @torch.jit.script
@@ -106,7 +111,7 @@ class ArgMaxMatcher(object):  # cannot inherit with torchscript
         Returns:
             matches:  int32 tensor indicating the row each column matches to.
         """
-        return -1 * torch.ones(similarity_matrix.shape[1], dtype=torch.long)
+        return -1 * torch.ones(similarity_matrix.shape[1], dtype=torch.long, device=similarity_matrix.device)
 
     def _match_when_rows_are_non_empty(self, similarity_matrix):
         """Performs matching when the rows of similarity matrix are non empty.
@@ -115,12 +120,11 @@ class ArgMaxMatcher(object):  # cannot inherit with torchscript
             matches:  int32 tensor indicating the row each column matches to.
         """
         # Matches for each column
-        matches = torch.argmax(similarity_matrix, 0)
+        matched_vals, matches = torch.max(similarity_matrix, 0)
 
         # Deal with matched and unmatched threshold
         if self._matched_threshold is not None:
             # Get logical indices of ignored and unmatched columns as tf.int64
-            matched_vals = torch.max(similarity_matrix, 0)[0]
             below_unmatched_threshold = self._unmatched_threshold > matched_vals
             between_thresholds = (matched_vals >= self._unmatched_threshold) & \
                                  (self._matched_threshold > matched_vals)
@@ -134,9 +138,8 @@ class ArgMaxMatcher(object):  # cannot inherit with torchscript
 
         if self._force_match_for_each_row:
             force_match_column_ids = torch.argmax(similarity_matrix, 1)
-            force_match_column_indicators = one_hot(force_match_column_ids, similarity_matrix.shape[1])
-            force_match_row_ids = torch.argmax(force_match_column_indicators, 0)
-            force_match_column_mask = torch.max(force_match_column_indicators, 0)[0] != 0
+            force_match_column_indicators = one_hot_bool(force_match_column_ids, similarity_matrix.shape[1])
+            force_match_column_mask, force_match_row_ids = torch.max(force_match_column_indicators, 0)
             final_matches = torch.where(force_match_column_mask, force_match_row_ids, matches)
             return final_matches
         else:

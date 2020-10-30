@@ -252,14 +252,14 @@ def reduce_dict(input_dict, average=True):
     return reduced_dict
 
 
-def all_gather_container(container, group=None):
+def all_gather_container(container, group=None, cat_dim=0):
     group = group or dist.group.WORLD
     world_size = dist.get_world_size(group)
 
     def _do_gather(tensor):
         tensor_list = [torch.empty_like(tensor) for _ in range(world_size)]
         dist.all_gather(tensor_list, tensor, group=group)
-        return torch.cat(tensor_list, dim=-1)
+        return torch.cat(tensor_list, dim=cat_dim)
 
     if isinstance(container, dict):
         gathered = dict()
@@ -278,7 +278,7 @@ def all_gather_container(container, group=None):
         return _do_gather(container)
 
 
-def gather_container(container, dst, group=None):
+def gather_container(container, dst, group=None, cat_dim=0):
     group = group or dist.group.WORLD
     world_size = dist.get_world_size(group)
     this_rank = dist.get_rank(group)
@@ -289,7 +289,7 @@ def gather_container(container, dst, group=None):
         else:
             tensor_list = None
         dist.gather(tensor, tensor_list, dst=dst, group=group)
-        return torch.cat(tensor_list, dim=-1)
+        return torch.cat(tensor_list, dim=cat_dim)
 
     if isinstance(container, dict):
         gathered = dict()

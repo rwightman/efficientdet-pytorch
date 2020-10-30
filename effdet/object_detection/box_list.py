@@ -18,7 +18,7 @@ BoxList represents a list of bounding boxes as tensorflow
 tensors, where each bounding box is represented as a row of 4 numbers,
 [y_min, x_min, y_max, x_max].  It is assumed that all bounding boxes
 within a given list correspond to a single image.  See also
-box_list_ops.py for common box related operations (such as area, iou, etc).
+box_list.py for common box related operations (such as area, iou, etc).
 
 Optionally, users can add additional related fields (such as weights).
 We assume the following things to be true about fields:
@@ -130,7 +130,7 @@ class BoxList(object):
             ValueError: if invalid field
         """
         if not self.has_field(field):
-            raise ValueError('field ' + str(field) + ' does not exist')
+            raise ValueError(f'field {field} does not exist')
         return self.data[field]
 
     def set_field(self, field: str, value: torch.Tensor):
@@ -146,7 +146,7 @@ class BoxList(object):
             ValueError: if the box_list does not have specified field.
         """
         if not self.has_field(field):
-            raise ValueError('field %s does not exist' % field)
+            raise ValueError(f'field {field} does not exist')
         self.data[field] = value
 
     def get_center_coordinates_and_sizes(self):

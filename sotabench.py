@@ -8,8 +8,7 @@ except ImportError:
     has_amp = False
 from sotabencheval.object_detection import COCOEvaluator
 from sotabencheval.utils import is_server, extract_archive
-from effdet import create_model
-from data import CocoDetection, create_loader
+from effdet import create_model, create_loader, create_dataset
 
 NUM_GPU = 1
 BATCH_SIZE = (128 if has_amp else 64) * NUM_GPU
@@ -42,6 +41,17 @@ def _entry(model_name, paper_model_name, paper_arxiv_id, batch_size=BATCH_SIZE, 
 # NOTE For any original PyTorch models, I'll remove from this list when you add to sotabench to
 # avoid overlap and confusion. Please contact me.
 model_list = [
+
+    ## Weights trained by myself or others in PyTorch
+    _entry('resdet50', 'ResDet50', '1911.09070', batch_size=_bs(72),
+           model_desc='Trained in PyTorch with https://github.com/rwightman/efficientdet-pytorch'),
+    _entry('tf_efficientdet_lite0', 'EfficientDet-Lite0', '1911.09070', batch_size=_bs(128),
+           model_desc='Trained in PyTorch with https://github.com/rwightman/efficientdet-pytorch'),
+    _entry('efficientdet_d0', 'EfficientDet-D0', '1911.09070', batch_size=_bs(112),
+           model_desc='Trained in PyTorch with https://github.com/rwightman/efficientdet-pytorch'),
+    _entry('efficientdet_d1', 'EfficientDet-D1', '1911.09070', batch_size=_bs(72),
+           model_desc='Trained in PyTorch with https://github.com/rwightman/efficientdet-pytorch'),
+
     ## Weights ported by myself from other frameworks
     _entry('tf_efficientdet_d0', 'EfficientDet-D0', '1911.09070', batch_size=_bs(112),
            model_desc='Ported from official Google AI Tensorflow weights'),
@@ -59,10 +69,8 @@ model_list = [
            model_desc='Ported from official Google AI Tensorflow weights'),
     _entry('tf_efficientdet_d7', 'EfficientDet-D7', '1911.09070', batch_size=_bs(4),
            model_desc='Ported from official Google AI Tensorflow weights'),
-
-    ## Weights trained by myself in PyTorch
-    _entry('efficientdet_d0', 'EfficientDet-D0', '1911.09070', batch_size=_bs(112),
-           model_desc='Trained in PyTorch with https://github.com/rwightman/efficientdet-pytorch'),
+    # _entry('tf_efficientdet_d7x', 'EfficientDet-D7X', '1911.09070', batch_size=_bs(4),
+    #        model_desc='Ported from official Google AI Tensorflow weights'),
 ]
 
 
@@ -87,14 +95,13 @@ def eval_model(model_name, paper_model_name, paper_arxiv_id, batch_size=64, mode
     else:
         print('AMP not installed, running network in FP32.')
 
-    annotation_path = os.path.join(DATA_ROOT, 'annotations', f'instances_{ANNO_SET}.json')
     evaluator = COCOEvaluator(
         root=DATA_ROOT,
         model_name=paper_model_name,
         model_description=model_description,
         paper_arxiv_id=paper_arxiv_id)
 
-    dataset = CocoDetection(os.path.join(DATA_ROOT, ANNO_SET), annotation_path)
+    dataset = create_dataset('coco', DATA_ROOT, splits='val')
 
     loader = create_loader(
         dataset,
@@ -106,16 +113,17 @@ def eval_model(model_name, paper_model_name, paper_arxiv_id, batch_size=64, mode
         pin_mem=True)
 
     iterator = tqdm.tqdm(loader, desc="Evaluation", mininterval=5)
+    sample_count = 0
     evaluator.reset_time()
-
     with torch.no_grad():
         for i, (input, target) in enumerate(iterator):
-            output = bench(input, target['img_scale'], target['img_size'])
+            output = bench(input, target)
             output = output.cpu()
-            sample_ids = target['img_id'].cpu()
             results = []
             for index, sample in enumerate(output):
-                image_id = int(sample_ids[index])
+                image_id = int(dataset.parser.img_ids[sample_count])
+                sample[:, 2] -= sample[:, 0]
+                sample[:, 3] -= sample[:, 1]
                 for det in sample:
                     score = float(det[4])
                     if score < .001:  # stop when below this threshold, scores in descending order
@@ -126,6 +134,7 @@ def eval_model(model_name, paper_model_name, paper_arxiv_id, batch_size=64, mode
                         score=score,
                         category_id=int(det[5]))
                     results.append(coco_det)
+                sample_count += 1
             evaluator.add(results)
 
             if evaluator.cache_exists:

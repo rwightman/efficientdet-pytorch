@@ -2,6 +2,7 @@
 
 Hacked together by Ross Wightman
 """
+from typing import Optional, Dict
 import torch
 import torch.nn as nn
 from timm.utils import ModelEma
@@ -49,49 +50,60 @@ def _post_process(config, cls_outputs, box_outputs):
 
 
 @torch.jit.script
-def _batch_detection(batch_size: int, class_out, box_out, anchor_boxes, indices, classes, img_scale, img_size):
+def _batch_detection(
+        batch_size: int, class_out, box_out, anchor_boxes, indices, classes,
+        img_scale: Optional[torch.Tensor] = None, img_size: Optional[torch.Tensor] = None):
     batch_detections = []
     # FIXME we may be able to do this as a batch with some tensor reshaping/indexing, PR welcome
     for i in range(batch_size):
+        img_scale_i = None if img_scale is None else img_scale[i]
+        img_size_i = None if img_size is None else img_size[i]
         detections = generate_detections(
-            class_out[i], box_out[i], anchor_boxes, indices[i], classes[i], img_scale[i], img_size[i])
+            class_out[i], box_out[i], anchor_boxes, indices[i], classes[i], img_scale_i, img_size_i)
         batch_detections.append(detections)
     return torch.stack(batch_detections, dim=0)
 
 
 class DetBenchPredict(nn.Module):
-    def __init__(self, model, config):
+    def __init__(self, model):
         super(DetBenchPredict, self).__init__()
-        self.config = config
         self.model = model
-        self.anchors = Anchors(
-            config.min_level, config.max_level,
-            config.num_scales, config.aspect_ratios,
-            config.anchor_scale, config.image_size)
+        self.config = model.config
+        self.anchors = Anchors.from_config(self.config)
 
-    def forward(self, x, img_scales, img_size):
+    def forward(self, x, img_info: Dict[str, torch.Tensor] = None):
         class_out, box_out = self.model(x)
         class_out, box_out, indices, classes = _post_process(self.config, class_out, box_out)
+        img_info = img_info or {}
+        img_scale = img_info['img_scale'] if 'img_scale' in img_info else None
+        img_size = img_info['img_size'] if 'img_size' in img_info else None
         return _batch_detection(
-            x.shape[0], class_out, box_out, self.anchors.boxes, indices, classes, img_scales, img_size)
+            x.shape[0], class_out, box_out, self.anchors.boxes, indices, classes, img_scale, img_size)
 
 
 class DetBenchTrain(nn.Module):
-    def __init__(self, model, config):
+    def __init__(self, model, create_labeler=True):
         super(DetBenchTrain, self).__init__()
-        self.config = config
         self.model = model
-        self.anchors = Anchors(
-            config.min_level, config.max_level,
-            config.num_scales, config.aspect_ratios,
-            config.anchor_scale, config.image_size)
-        self.anchor_labeler = AnchorLabeler(self.anchors, config.num_classes, match_threshold=0.5)
+        self.config = model.config
+        self.anchors = Anchors.from_config(self.config)
+        self.anchor_labeler = None
+        if create_labeler:
+            self.anchor_labeler = AnchorLabeler(self.anchors, self.config.num_classes, match_threshold=0.5)
         self.loss_fn = DetectionLoss(self.config)
 
-    def forward(self, x, target):
+    def forward(self, x, target: Dict[str, torch.Tensor]):
         class_out, box_out = self.model(x)
-        cls_targets, box_targets, num_positives = self.anchor_labeler.batch_label_anchors(
-            x.shape[0], target['bbox'], target['cls'])
+        if self.anchor_labeler is None:
+            # target should contain pre-computed anchor labels if labeler not present in bench
+            assert 'label_num_positives' in target
+            cls_targets = [target[f'label_cls_{l}'] for l in range(self.config.num_levels)]
+            box_targets = [target[f'label_bbox_{l}'] for l in range(self.config.num_levels)]
+            num_positives = target['label_num_positives']
+        else:
+            cls_targets, box_targets, num_positives = self.anchor_labeler.batch_label_anchors(
+                target['bbox'], target['cls'])
+
         loss, class_loss, box_loss = self.loss_fn(class_out, box_out, cls_targets, box_targets, num_positives)
         output = dict(loss=loss, class_loss=class_loss, box_loss=box_loss)
         if not self.training:
