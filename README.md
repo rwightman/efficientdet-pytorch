@@ -26,6 +26,7 @@ Merged a few months of accumulated fixes and additions.
 * Improved a few hot spots that squeek out a couple % of throughput gains, higher GPU utilization
 * Pascal / OpenImages evaluators based on Tensorflow Models Evaluator framework (usable for other datasets as well)
 * Support for native PyTorch DDP, SyncBN, and AMP in PyTorch >= 1.6. Still defaults to APEX if installed.
+* Non-square input image sizes are allowed for the model (the anchor layout). Specified by image_size tuple in model config. Currently still restricted to `size % 128 = 0` on each dim.
 * Allow anchor target generation to be done in either dataloader process' via collate or in model as in past. Can help balance compute.
 * Filter out unused target cls/box from dataset annotations in fixed size batch tensors before passing to target assigner. Seems to speed convergence.
 * Letterbox aware Random Erasing augmentation added.
