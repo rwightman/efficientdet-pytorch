@@ -13,10 +13,12 @@ Aside from the default model configs, there is a lot of flexibility to facilitat
 * BiFPN and head modules can be switched between depthwise separable or standard convolutions
 * Activations, batch norm layers are switchable via arguments (soon config)
 * Any backbone in my `timm` model collection that supports feature extraction (`features_only` arg) can be used as a bacbkone.
-  * Currently this is includes to all models implemented by the EficientNet and MobileNetv3 classes (which also includes MNasNet, MobileNetV2, MixNet and more). More soon...
-
 
 ## Updates
+### 2020-01-09
+* set model config to read-only after creation to reduce likelyhood of misuse
+* no accessing model or bench .config attr in forward() call chain (for torcscript compat)
+* numerous smaller changes that allow jit scripting of the model or train/predict bench
 
 ### 2020-10-30
 Merged a few months of accumulated fixes and additions.
@@ -85,39 +87,9 @@ Unlike the other tf_ prefixed models this is not ported from (as of yet unreleas
 TF ported weights from `timm` for the pretrained imagenet model as the backbone init, thus it uses SAME padding. 
 
 
-## Tasks / TODO
-### Core
-- [x] Feature extraction from my EfficientNet implementations (https://github.com/rwightman/gen-efficientnet-pytorch or https://github.com/rwightman/pytorch-image-models)
-- [x] Low level blocks / helpers (SeparableConv, create_pool2d (same padding), etc)
-- [x] PyTorch implementation of BiFPN, BoxNet, ClassNet modules and related submodules
-- [x] Port Tensorflow checkpoints to PyTorch -- initial D1 checkpoint converted, state_dict loaded, on to validation....
-- [x] Basic MS COCO validation script
-  - [x] Temporary (hacky) COCO dataset and transform 
-  - [x] Port reference TF anchor and object detection code
-  - [x] Verify model output sanity
-  - [X] Integrate MSCOCO eval metric calcs
-- [x] Some cleanup, testing
-- [x] Submit to test-dev server, all good
-- [x] pretrained URL based weight download
-- [ ] Torch hub
-- [x] Remove redundant bias layers that exist in the official impl and weights
-- [ ] Add visualization support
-- [x] Performance improvements, numpy TF detection code -> optimized PyTorch
-- [ ] Verify/fix Torchscript and ONNX export compatibility
-- [x] Try PyTorch 1.6/1.7 w/ NHWC (channels last) order which matches TF impl
-
-### Possible Future Tasks
-- [x] Basic Training (object detection) reimplementation
-- [ ] Advanced Training w/ Rand/AutoAugment, etc
-- [ ] Training (semantic segmentation) experiments
-- [ ] Integration with Detectron2 / MMDetection codebases
-- [ ] Addition and cleanup of EfficientNet based U-Net and DeepLab segmentation models that I've used in past projects
-- [ ] Addition and cleanup of OpenImages dataset/training support from a past project
-- [ ] Exploration of instance segmentation possibilities...
-
-If you are an organization is interested in sponsoring and any of this work, or prioritization of the possible future directions interests you, feel free to contact me (issue, LinkedIn, Twitter, hello at rwightman dot com). I will setup a github sponser if there is any interest.
-
 ## Models
+
+The table below contains models with pretrained weights. There are quite a number of other models that I have defined in [model configurations](effdet/config/model_config.py) that use various `timm` backbones.
 
 | Variant | mAP (val2017) | mAP (test-dev2017) | mAP (TF official val2017) | mAP (TF official test-dev2017) |
 | --- | :---: | :---: | :---: | :---: |
@@ -138,6 +110,8 @@ If you are an organization is interested in sponsoring and any of this work, or 
 See [model configurations](effdet/config/model_config.py) for model checkpoint urls and differences.
 
 _NOTE: Official scores for all modules now using soft-nms, but still using normal NMS here._
+
+_NOTE: In training some experimental models, I've noticed some potential issues with the combination of synchronized BatchNorm (`--sync-bn`) and model EMA weight everaging (`--model-ema`) during distributed training. The result is either a model that fails to converge, or appears to converge (training loss) but the eval loss (running BN stats) is garbage. I haven't observed this with EfficientNets, but have with some backbones like CspResNeXt, VoVNet, etc. Disabling either EMA or sync bn seems to eliminate the problem and result in good models. I have not fully characterized this issue._
 
 ## Environment Setup
 
@@ -474,3 +448,16 @@ NOTE: I've only tried submitting D7 to dev server for sanity check so far
  Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.725
  Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.823
 ```
+
+## TODO
+- [x] Basic Training (object detection) reimplementation
+- [ ] Mosaic Augmentation
+- [ ] Rand/AutoAugment
+- [ ] BBOX IoU loss (giou, diou, ciou, etc)
+- [ ] Training (semantic segmentation) experiments
+- [ ] Integration with Detectron2 / MMDetection codebases
+- [ ] Addition and cleanup of EfficientNet based U-Net and DeepLab segmentation models that I've used in past projects
+- [x] Addition and cleanup of OpenImages dataset/training support from a past project
+- [ ] Exploration of instance segmentation possibilities...
+
+If you are an organization is interested in sponsoring and any of this work, or prioritization of the possible future directions interests you, feel free to contact me (issue, LinkedIn, Twitter, hello at rwightman dot com). I will setup a github sponser if there is any interest.
