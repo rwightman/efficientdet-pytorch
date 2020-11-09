@@ -247,10 +247,13 @@ class DetectionLoss(nn.Module):
             box_targets: List[torch.Tensor],
             num_positives: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
 
-        loss_kwargs = dict(
+        l_fn = loss_fn
+        if not torch.jit.is_scripting() and self.use_jit:
+            # This branch only active if parent / bench itself isn't being scripted
+            # NOTE: I haven't figured out what to do here wrt to tracing, is it an issue?
+            l_fn = loss_jit
+
+        return l_fn(
+            cls_outputs, box_outputs, cls_targets, box_targets, num_positives,
             num_classes=self.num_classes, alpha=self.alpha, gamma=self.gamma, delta=self.delta,
             box_loss_weight=self.box_loss_weight, label_smoothing=self.label_smoothing, new_focal=self.new_focal)
-        if self.use_jit:
-            return loss_jit(cls_outputs, box_outputs, cls_targets, box_targets, num_positives, **loss_kwargs)
-        else:
-            return loss_fn(cls_outputs, box_outputs, cls_targets, box_targets, num_positives, **loss_kwargs)

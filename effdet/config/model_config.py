@@ -6,6 +6,7 @@ TODO use a different config system (OmegaConfig -> Hydra?), separate model from 
 """
 
 from omegaconf import OmegaConf
+from copy import deepcopy
 import itertools
 
 
@@ -50,10 +51,11 @@ def default_detection_model_configs():
     h.use_native_resize_op = False
     h.pooling_type = None
     h.redundant_bias = True  # original TF models have back to back bias + BN layers, not necessary!
+    h.head_bn_level_first = False  # change order of BN in head repeat list of lists, True for torchscript compat
 
     h.fpn_name = None
     h.fpn_config = None
-    h.fpn_drop_path_rate = 0.  # No stochastic depth in default.
+    h.fpn_drop_path_rate = 0.  # No stochastic depth in default. NOTE not currently used, unstable training
 
     # classification loss (used by train bench)
     h.alpha = 0.25
@@ -478,7 +480,7 @@ def get_efficientdet_config(model_name='tf_efficientdet_d1'):
     h = default_detection_model_configs()
     h.update(efficientdet_model_param_dict[model_name])
     h.num_levels = h.max_level - h.min_level + 1
-    return h
+    return deepcopy(h)  # may be unnecessary, ensure no references to param dict values
 
 
 def bifpn_config(min_level, max_level, weight_method=None, base_reduction=8):
