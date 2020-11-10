@@ -3,8 +3,8 @@ name: Feature request
 about: Suggest an idea for this project. Issues are for reporting bugs or requesting
   features, I hope to activate the discussion forum soon for asking questions or seeking
   help from the community.
-title: ''
-labels: ''
+title: "[FEATURE] Feature title..."
+labels: enhancement
 assignees: ''
 
 ---

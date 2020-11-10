@@ -3,8 +3,8 @@ name: Bug report
 about: Create a bug report to help us improve. Issues are for reporting bugs or requesting
   features, I hope to activate the discussion forum soon for asking questions or seeking
   help from the community.
-title: ''
-labels: ''
+title: "[BUG] Issue title..."
+labels: bug
 assignees: ''
 
 ---
