@@ -15,7 +15,7 @@ Aside from the default model configs, there is a lot of flexibility to facilitat
 * Any backbone in my `timm` model collection that supports feature extraction (`features_only` arg) can be used as a bacbkone.
 
 ## Updates
-### 2020-01-09
+### 2020-10-09
 * set model config to read-only after creation to reduce likelyhood of misuse
 * no accessing model or bench .config attr in forward() call chain (for torcscript compat)
 * numerous smaller changes that allow jit scripting of the model or train/predict bench
