@@ -7,7 +7,6 @@ TODO use a different config system (OmegaConfig -> Hydra?), separate model from 
 
 from omegaconf import OmegaConf
 from copy import deepcopy
-import itertools
 
 
 def default_detection_model_configs():
@@ -169,6 +168,7 @@ efficientdet_model_param_dict = dict(
         act_type='leaky_relu',
         redundant_bias=False,
         separable_conv=False,
+        head_bn_level_first=True,
         backbone_args=dict(drop_path_rate=0.2),
         url='',
     ),
@@ -184,6 +184,24 @@ efficientdet_model_param_dict = dict(
         act_type='leaky_relu',
         redundant_bias=False,
         separable_conv=False,
+        head_bn_level_first=True,
+        backbone_args=dict(drop_path_rate=0.2),
+        url='',
+    ),
+    cspresdext50pan=dict(
+        name='cspresdext50pan',
+        backbone_name='cspresnext50',
+        image_size=(640, 640),
+        aspect_ratios=[1.0, 2.0, 0.5],
+        fpn_channels=88,
+        fpn_cell_repeats=3,
+        box_class_repeats=3,
+        pad_type='',
+        act_type='leaky_relu',
+        fpn_name='pan_fa',  # PAN FPN experiment
+        redundant_bias=False,
+        separable_conv=False,
+        head_bn_level_first=True,
         backbone_args=dict(drop_path_rate=0.2),
         url='',
     ),
@@ -199,6 +217,7 @@ efficientdet_model_param_dict = dict(
         act_type='leaky_relu',
         redundant_bias=False,
         separable_conv=False,
+        head_bn_level_first=True,
         backbone_args=dict(drop_path_rate=0.2),
         url='',
     ),
@@ -212,6 +231,7 @@ efficientdet_model_param_dict = dict(
         box_class_repeats=3,
         pad_type='',
         redundant_bias=False,
+        head_bn_level_first=True,
         backbone_args=dict(drop_path_rate=0.1),
         url='',  # no pretrained weights yet
     ),
@@ -225,6 +245,7 @@ efficientdet_model_param_dict = dict(
         box_class_repeats=3,
         pad_type='',
         redundant_bias=False,
+        head_bn_level_first=True,
         backbone_args=dict(drop_path_rate=0.2),
         url='',  # no pretrained weights yet
     ),
@@ -239,6 +260,7 @@ efficientdet_model_param_dict = dict(
         pad_type='',
         act_type='relu6',
         redundant_bias=False,
+        head_bn_level_first=True,
         backbone_args=dict(drop_path_rate=0.05),
         url='',  # no pretrained weights yet
     ),
@@ -253,6 +275,7 @@ efficientdet_model_param_dict = dict(
         pad_type='',
         act_type='relu6',
         redundant_bias=False,
+        head_bn_level_first=True,
         backbone_args=dict(drop_path_rate=0.1),
         url='',  # no pretrained weights yet
     ),
@@ -267,8 +290,23 @@ efficientdet_model_param_dict = dict(
         pad_type='',
         act_type='hard_swish',
         redundant_bias=False,
+        head_bn_level_first=True,
         backbone_args=dict(drop_path_rate=0.1),
         url='',  # no pretrained weights yet
+    ),
+    efficientdet_q0=dict(
+        name='efficientdet_q0',
+        backbone_name='efficientnet_b0',
+        image_size=(512, 512),
+        fpn_channels=64,
+        fpn_cell_repeats=3,
+        box_class_repeats=3,
+        pad_type='',
+        fpn_name='qufpn_fa',  # quad-fpn + fast attn experiment
+        redundant_bias=False,
+        head_bn_level_first=True,
+        backbone_args=dict(drop_path_rate=0.1),
+        url='',
     ),
     efficientdet_w0=dict(
         name='efficientdet_w0',  # 'wide'
@@ -280,6 +318,7 @@ efficientdet_model_param_dict = dict(
         box_class_repeats=3,
         pad_type='',
         redundant_bias=False,
+        head_bn_level_first=True,
         backbone_args=dict(
             drop_path_rate=0.1,
             feature_location='depthwise'),  # features from after DW/SE in IR block
@@ -296,6 +335,7 @@ efficientdet_model_param_dict = dict(
         pad_type='',
         act_type='relu',
         redundant_bias=False,
+        head_bn_level_first=True,
         separable_conv=False,
         backbone_args=dict(drop_path_rate=0.1),
         url='',
@@ -310,9 +350,24 @@ efficientdet_model_param_dict = dict(
         box_class_repeats=3,
         pad_type='',
         act_type='relu',
+        redundant_bias=False,
+        head_bn_level_first=True,
         separable_conv=False,
         backbone_args=dict(drop_path_rate=0.2),
         url='',  # no pretrained weights yet
+    ),
+    efficientdet_lite0=dict(
+        name='efficientdet_lite0',
+        backbone_name='efficientnet_lite0',
+        image_size=(512, 512),
+        fpn_channels=64,
+        fpn_cell_repeats=3,
+        box_class_repeats=3,
+        act_type='relu',
+        redundant_bias=False,
+        head_bn_level_first=True,
+        backbone_args=dict(drop_path_rate=0.1),
+        url='',
     ),
 
     # Models ported from Tensorflow with pretrained backbones ported from Tensorflow
@@ -481,60 +536,3 @@ def get_efficientdet_config(model_name='tf_efficientdet_d1'):
     h.update(efficientdet_model_param_dict[model_name])
     h.num_levels = h.max_level - h.min_level + 1
     return deepcopy(h)  # may be unnecessary, ensure no references to param dict values
-
-
-def bifpn_config(min_level, max_level, weight_method=None, base_reduction=8):
-    """BiFPN config with sum.
-    Adapted from https://github.com/google/automl/blob/56815c9986ffd4b508fe1d68508e268d129715c1/efficientdet/keras/fpn_configs.py
-    """
-    p = OmegaConf.create()
-    # p.nodes = [
-    #     {'reduction': base_reduction << 3, 'inputs_offsets': [3, 4]},
-    #     {'reduction': base_reduction << 2, 'inputs_offsets': [2, 5]},
-    #     {'reduction': base_reduction << 1, 'inputs_offsets': [1, 6]},
-    #     {'reduction': base_reduction, 'inputs_offsets': [0, 7]},
-    #     {'reduction': base_reduction << 1, 'inputs_offsets': [1, 7, 8]},
-    #     {'reduction': base_reduction << 2, 'inputs_offsets': [2, 6, 9]},
-    #     {'reduction': base_reduction << 3, 'inputs_offsets': [3, 5, 10]},
-    #     {'reduction': base_reduction << 4, 'inputs_offsets': [4, 11]},
-    # ]
-    # p.weight_method = 'sum'
-    #
-
-    p.weight_method = weight_method or 'fastattn'
-
-    num_levels = max_level - min_level + 1
-    node_ids = {min_level + i: [i] for i in range(num_levels)}
-
-    level_last_id = lambda level: node_ids[level][-1]
-    level_all_ids = lambda level: node_ids[level]
-    id_cnt = itertools.count(num_levels)
-
-    p.nodes = []
-    for i in range(max_level - 1, min_level - 1, -1):
-        # top-down path.
-        p.nodes.append({
-            'reduction': 1 << i,
-            'inputs_offsets': [level_last_id(i), level_last_id(i + 1)]
-        })
-        node_ids[i].append(next(id_cnt))
-
-    for i in range(min_level + 1, max_level + 1):
-        # bottom-up path.
-        p.nodes.append({
-            'reduction': 1 << i,
-            'inputs_offsets': level_all_ids(i) + [level_last_id(i - 1)]
-        })
-        node_ids[i].append(next(id_cnt))
-    return p
-
-
-def get_fpn_config(fpn_name, min_level=3, max_level=7):
-    if not fpn_name:
-        fpn_name = 'bifpn_fa'
-    name_to_config = {
-        'bifpn_sum': bifpn_config(min_level=min_level, max_level=max_level, weight_method='sum'),
-        'bifpn_attn': bifpn_config(min_level=min_level, max_level=max_level, weight_method='attn'),
-        'bifpn_fa': bifpn_config(min_level=min_level, max_level=max_level, weight_method='fastattn'),
-    }
-    return name_to_config[fpn_name]

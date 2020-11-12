@@ -213,7 +213,7 @@ class BiFpnLayer(nn.Module):
                 feature_info, fpn_config, fpn_channels, tuple(fnode_cfg['inputs_offsets']),
                 target_reduction=reduction, pad_type=pad_type, pooling_type=pooling_type, norm_layer=norm_layer,
                 apply_bn_for_resampling=apply_bn_for_resampling, conv_after_downsample=conv_after_downsample,
-                redundant_bias=redundant_bias, weight_method=fpn_config.weight_method)
+                redundant_bias=redundant_bias, weight_method=fnode_cfg['weight_method'])
 
             after_combine = nn.Sequential()
             conv_kwargs = dict(
