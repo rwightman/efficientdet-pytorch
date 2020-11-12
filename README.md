@@ -16,7 +16,7 @@ Aside from the default model configs, there is a lot of flexibility to facilitat
 
 ## Updates
 ### 2020-11-12
-* add experimental PAN and Quad FPN configs to the existing EfficientDet BiFPN w/ to test model configs
+* add experimental PAN and Quad FPN configs to the existing EfficientDet BiFPN w/ two test model configs
 * switch untrained experimental model configs to use torchscript compat bn head layout by default
 
 ### 2020-11-09
