@@ -125,7 +125,7 @@ def generate_detections(
 
     Returns:
         detections: detection results in a tensor with shape [MAX_DETECTION_POINTS, 6],
-            each row representing [x, y, width, height, score, class]
+            each row representing [x_min, y_min, x_max, y_max, score, class]
     """
     assert box_outputs.shape[-1] == 4
     assert anchor_boxes.shape[-1] == 4
