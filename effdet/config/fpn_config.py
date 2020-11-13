@@ -4,7 +4,7 @@ from omegaconf import OmegaConf
 
 
 def bifpn_config(min_level, max_level, weight_method=None):
-    """BiFPN config with sum.
+    """BiFPN config.
     Adapted from https://github.com/google/automl/blob/56815c9986ffd4b508fe1d68508e268d129715c1/efficientdet/keras/fpn_configs.py
     """
     p = OmegaConf.create()
