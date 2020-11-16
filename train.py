@@ -287,6 +287,22 @@ def main():
     if args.channels_last:
         model = model.to(memory_format=torch.channels_last)
 
+    if args.distributed:
+        if args.sync_bn:
+            try:
+                if has_apex and use_amp != 'native':
+                    model = convert_syncbn_model(model)
+                else:
+                    model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
+                if args.local_rank == 0:
+                    logging.info(
+                        'Converted model to use Synchronized BatchNorm. WARNING: You may have issues if using '
+                        'zero initialized BN layers (enabled by default for ResNets) while sync-bn enabled.')
+            except Exception as e:
+                logging.error('Failed to enable Synchronized BatchNorm. Install Apex or Torch >= 1.1')
+
+    model = torch.jit.script(model)
+
     optimizer = create_optimizer(args, model)
 
     amp_autocast = suppress  # do nothing
@@ -323,18 +339,6 @@ def main():
             load_checkpoint(unwrap_bench(model_ema), args.resume, use_ema=True)
 
     if args.distributed:
-        if args.sync_bn:
-            try:
-                if has_apex and use_amp != 'native':
-                    model = convert_syncbn_model(model)
-                else:
-                    model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
-                if args.local_rank == 0:
-                    logging.info(
-                        'Converted model to use Synchronized BatchNorm. WARNING: You may have issues if using '
-                        'zero initialized BN layers (enabled by default for ResNets) while sync-bn enabled.')
-            except Exception as e:
-                logging.error('Failed to enable Synchronized BatchNorm. Install Apex or Torch >= 1.1')
         if has_apex and use_amp != 'native':
             if args.local_rank == 0:
                 logging.info("Using apex DistributedDataParallel.")
@@ -407,7 +411,7 @@ def main():
                 if args.distributed and args.dist_bn in ('broadcast', 'reduce'):
                     distribute_bn(model_ema, args.world_size, args.dist_bn == 'reduce')
 
-                eval_metrics = validate(model_ema.ema, loader_eval, args, evaluator, log_suffix=' (EMA)')
+                eval_metrics = validate(model_ema.module, loader_eval, args, evaluator, log_suffix=' (EMA)')
             else:
                 eval_metrics = validate(model, loader_eval, args, evaluator)
 

@@ -133,9 +133,7 @@ class DetBenchTrain(nn.Module):
 def unwrap_bench(model):
     # Unwrap a model in support bench so that various other fns can access the weights and attribs of the
     # underlying model directly
-    if isinstance(model, ModelEma):  # unwrap ModelEma
-        return unwrap_bench(model.ema)
-    elif hasattr(model, 'module'):  # unwrap DDP
+    if hasattr(model, 'module'):  # unwrap DDP or EMA
         return unwrap_bench(model.module)
     elif hasattr(model, 'model'):  # unwrap Bench -> model
         return unwrap_bench(model.model)
