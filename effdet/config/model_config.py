@@ -32,6 +32,7 @@ def default_detection_model_configs():
     h.num_scales = 3
     h.aspect_ratios = [(1.0, 1.0), (1.4, 0.7), (0.7, 1.4)]
     # ratio w/h: 2.0 means w=1.4, h=0.7. Can be computed with k-mean per dataset.
+    # aspect ratios can be specified as below too, pairs will be calc as sqrt(val), 1/sqrt(val)
     #h.aspect_ratios = [1.0, 2.0, 0.5]
     h.anchor_scale = 4.0
 
@@ -51,6 +52,7 @@ def default_detection_model_configs():
     h.pooling_type = None
     h.redundant_bias = True  # original TF models have back to back bias + BN layers, not necessary!
     h.head_bn_level_first = False  # change order of BN in head repeat list of lists, True for torchscript compat
+    h.head_act_type = None  # activation for heads, same as act_type if None
 
     h.fpn_name = None
     h.fpn_config = None
@@ -166,6 +168,7 @@ efficientdet_model_param_dict = dict(
         box_class_repeats=3,
         pad_type='',
         act_type='leaky_relu',
+        head_act_type='silu',
         redundant_bias=False,
         separable_conv=False,
         head_bn_level_first=True,
@@ -307,6 +310,34 @@ efficientdet_model_param_dict = dict(
         head_bn_level_first=True,
         backbone_args=dict(drop_path_rate=0.1),
         url='',
+    ),
+    efficientdet_q1=dict(
+        name='efficientdet_q1',
+        backbone_name='efficientnet_b1',
+        image_size=(640, 640),
+        fpn_channels=88,
+        fpn_cell_repeats=3,
+        box_class_repeats=3,
+        pad_type='',
+        fpn_name='qufpn_fa',  # quad-fpn + fast attn experiment
+        redundant_bias=False,
+        head_bn_level_first=True,
+        backbone_args=dict(drop_path_rate=0.2),
+        url='',
+    ),
+    efficientdet_q2=dict(
+        name='efficientdet_q2',
+        backbone_name='efficientnet_b2',
+        image_size=(768, 768),
+        fpn_channels=112,
+        fpn_cell_repeats=4,
+        box_class_repeats=3,
+        pad_type='',
+        fpn_name='qufpn_fa',  # quad-fpn + fast attn experiment
+        redundant_bias=False,
+        head_bn_level_first=True,
+        backbone_args=dict(drop_path_rate=0.2),
+        url='',  # no pretrained weights yet
     ),
     efficientdet_w0=dict(
         name='efficientdet_w0',  # 'wide'

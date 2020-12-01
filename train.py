@@ -187,6 +187,8 @@ parser.add_argument('--pin-mem', action='store_true', default=False,
                     help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
 parser.add_argument('--no-prefetcher', action='store_true', default=False,
                     help='disable fast prefetcher')
+parser.add_argument('--torchscript', dest='torchscript', action='store_true',
+                    help='convert model torchscript for inference')
 add_bool_arg(parser, 'bench-labeler', default=False,
              help='label targets in model bench, increases GPU load at expense of loader processes')
 parser.add_argument('--output', default='', type=str, metavar='PATH',
@@ -287,21 +289,20 @@ def main():
     if args.channels_last:
         model = model.to(memory_format=torch.channels_last)
 
-    if args.distributed:
-        if args.sync_bn:
-            try:
-                if has_apex and use_amp != 'native':
-                    model = convert_syncbn_model(model)
-                else:
-                    model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
-                if args.local_rank == 0:
-                    logging.info(
-                        'Converted model to use Synchronized BatchNorm. WARNING: You may have issues if using '
-                        'zero initialized BN layers (enabled by default for ResNets) while sync-bn enabled.')
-            except Exception as e:
-                logging.error('Failed to enable Synchronized BatchNorm. Install Apex or Torch >= 1.1')
+    if args.distributed and args.sync_bn:
+        if has_apex and use_amp != 'native':
+            model = convert_syncbn_model(model)
+        else:
+            model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
+        if args.local_rank == 0:
+            logging.info(
+                'Converted model to use Synchronized BatchNorm. WARNING: You may have issues if using '
+                'zero initialized BN layers (enabled by default for ResNets) while sync-bn enabled.')
 
-    model = torch.jit.script(model)
+    if args.torchscript:
+        assert not use_amp == 'apex', 'Cannot use APEX AMP with torchscripted model'
+        assert not args.sync_bn, 'Cannot use SyncBatchNorm with torchscripted model'
+        model = torch.jit.script(model)
 
     optimizer = create_optimizer(args, model)
 
@@ -333,9 +334,8 @@ def main():
     model_ema = None
     if args.model_ema:
         # Important to create EMA model after cuda(), DP wrapper, and AMP but before SyncBN and DDP wrapper
-        model_ema = ModelEma(model, decay=args.model_ema_decay)
+        model_ema = ModelEmaV2(model, decay=args.model_ema_decay)
         if args.resume:
-            # FIXME bit of a mess with bench, cannot use the load in ModelEma
             load_checkpoint(unwrap_bench(model_ema), args.resume, use_ema=True)
 
     if args.distributed:

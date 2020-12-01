@@ -309,7 +309,8 @@ class HeadNet(nn.Module):
         norm_layer = config.norm_layer or nn.BatchNorm2d
         if config.norm_kwargs:
             norm_layer = partial(norm_layer, **config.norm_kwargs)
-        act_layer = get_act_layer(config.act_type) or _ACT_LAYER
+        act_type = config.head_act_type if getattr(config, 'head_act_type', None) else config.act_type
+        act_layer = get_act_layer(act_type) or _ACT_LAYER
 
         # Build convolution repeats
         conv_fn = SeparableConv2d if config.separable_conv else ConvBnAct2d
