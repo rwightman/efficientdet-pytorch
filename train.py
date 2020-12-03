@@ -347,7 +347,11 @@ def main():
             if args.local_rank == 0:
                 logging.info("Using torch DistributedDataParallel.")
             model = NativeDDP(model, device_ids=[args.device])
-        # NOTE: EMA model does not need to be wrapped by DDP
+        # NOTE: EMA model does not need to be wrapped by DDP...
+        if model_ema is not None and not args.resume:
+            # ...but it is a good idea to sync EMA copy of weights
+            # NOTE: ModelEma init could be moved after DDP wrapper if using PyTorch DDP, not Apex.
+            model_ema.set(model)
 
     lr_scheduler, num_epochs = create_scheduler(args, optimizer)
     start_epoch = 0
