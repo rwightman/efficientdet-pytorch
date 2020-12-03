@@ -45,11 +45,12 @@ def default_detection_model_configs():
     h.fpn_cell_repeats = 3
     h.fpn_channels = 88
     h.separable_conv = True
-    h.apply_bn_for_resampling = True
+    h.apply_resample_bn = True
     h.conv_after_downsample = False
     h.conv_bn_relu_pattern = False
     h.use_native_resize_op = False
-    h.pooling_type = None
+    h.downsample_type = 'max'
+    h.upsample_type = 'nearest'
     h.redundant_bias = True  # original TF models have back to back bias + BN layers, not necessary!
     h.head_bn_level_first = False  # change order of BN in head repeat list of lists, True for torchscript compat
     h.head_act_type = None  # activation for heads, same as act_type if None
@@ -169,6 +170,8 @@ efficientdet_model_param_dict = dict(
         pad_type='',
         act_type='leaky_relu',
         head_act_type='silu',
+        downsample_type='max',
+        upsample_type='bilinear',
         redundant_bias=False,
         separable_conv=False,
         head_bn_level_first=True,
@@ -566,4 +569,6 @@ def get_efficientdet_config(model_name='tf_efficientdet_d1'):
     h = default_detection_model_configs()
     h.update(efficientdet_model_param_dict[model_name])
     h.num_levels = h.max_level - h.min_level + 1
-    return deepcopy(h)  # may be unnecessary, ensure no references to param dict values
+    h = deepcopy(h)  # may be unnecessary, ensure no references to param dict values
+    OmegaConf.set_struct(h, True)
+    return h
