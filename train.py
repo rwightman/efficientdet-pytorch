@@ -433,7 +433,25 @@ def main():
         logging.info('*** Best metric: {0} (epoch {1})'.format(best_metric, best_epoch))
 
 
-def create_datasets_and_loaders(args, model_config):
+def create_datasets_and_loaders(
+        args,
+        model_config,
+        transform_train_fn=None,
+        transform_eval_fn=None,
+        collate_fn=None,
+):
+    """ Setup datasets, transforms, loaders, evaluator.
+
+    Args:
+        args: Command line args / config for training
+        model_config: Model specific configuration dict / struct
+        transform_train_fn: Override default image + annotation transforms (see note in loaders.py)
+        transform_eval_fn: Override default image + annotation transforms (see note in loaders.py)
+        collate_fn: Override default fast collate function
+
+    Returns:
+        Train loader, validation loader, evaluator
+    """
     input_config = resolve_input_config(args, model_config=model_config)
 
     dataset_train, dataset_eval = create_dataset(args.dataset, args.root)
@@ -463,6 +481,8 @@ def create_datasets_and_loaders(args, model_config):
         distributed=args.distributed,
         pin_mem=args.pin_mem,
         anchor_labeler=labeler,
+        transform_fn=transform_train_fn,
+        collate_fn=collate_fn,
     )
 
     if args.val_skip > 1:
@@ -481,6 +501,8 @@ def create_datasets_and_loaders(args, model_config):
         distributed=args.distributed,
         pin_mem=args.pin_mem,
         anchor_labeler=labeler,
+        transform_fn=transform_eval_fn,
+        collate_fn=collate_fn,
     )
 
     evaluator = create_evaluator(args.dataset, loader_eval.dataset, distributed=args.distributed, pred_yxyx=False)
