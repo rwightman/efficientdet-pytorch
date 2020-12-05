@@ -95,21 +95,26 @@ TF ported weights from `timm` for the pretrained imagenet model as the backbone 
 
 The table below contains models with pretrained weights. There are quite a number of other models that I have defined in [model configurations](effdet/config/model_config.py) that use various `timm` backbones.
 
-| Variant | mAP (val2017) | mAP (test-dev2017) | mAP (TF official val2017) | mAP (TF official test-dev2017) |
-| --- | :---: | :---: | :---: | :---: |
-| tf_efficientdet_lite0.pth | 32.0 | TBD | N/A | N/A |
-| efficientdet_d0.pth | 33.6 | TBD | 33.5 | 33.8 |
-| tf_efficientdet_d0.pth | 34.2 | TBD | 34.3 | 34.6 |
-| efficientdet_d1.pth | 39.4 | 39.5 | 39.1 | 39.6 |
-| tf_efficientdet_d1.pth | 40.1 | TBD | 40.2 | 40.5 |
-| resdet50 | 41.6 | TBD | N/A | N/A |
-| tf_efficientdet_d2.pth | 43.4 | TBD | 42.5 | 43 |
-| tf_efficientdet_d3.pth | 47.1 | TBD | 47.2 | 47.5 |
-| tf_efficientdet_d4.pth | 49.2 | TBD | 49.3 | 49.7 |
-| tf_efficientdet_d5.pth | 51.2 | TBD | 51.2 | 51.5 |
-| tf_efficientdet_d6.pth | 52.0 | TBD | 52.1 | 52.6 |
-| tf_efficientdet_d7.pth | 53.1 | 53.4 | 53.4 | 53.7 |
-| tf_efficientdet_d7x.pth | 54.3 | TBD | 54.4 | 55.1 |
+| Variant | mAP (val2017) | mAP (test-dev2017) | mAP (TF official val2017) | mAP (TF official test-dev2017) | Params (M) |
+| --- | :---: | :---: | :---: | :---: | :---: |
+| tf_efficientdet_lite0.pth | 32.0 | TBD | N/A | N/A | 3.24 |
+| efficientdet_d0.pth | 33.6 | TBD | 33.5 | 33.8 | 3.88 |
+| tf_efficientdet_d0.pth | 34.2 | TBD | 34.3 | 34.6 | 3.88 |
+| efficientdet_q0.pth | 40.6 | TBD | N/A | N/A | 4.13 |
+| efficientdet_d1.pth | 39.4 | 39.5 | 39.1 | 39.6 | 6.62 |
+| tf_efficientdet_d1.pth | 40.1 | TBD | 40.2 | 40.5 | 6.63 |
+| efficientdet_q1.pth | 40.6 | TBD | N/A | N/A | 6.98 |
+| resdext50pan | 41.2 | TBD | N/A | N/A | 22.2 |
+| resdet50 | 41.6 | TBD | N/A | N/A | 27.6 |
+| efficientdet_q2.pth | 43.1 | TBD | N/A | N/A | 8.81 |
+| tf_efficientdet_d2.pth | 43.4 | TBD | 42.5 | 43 | 8.10 |
+| tf_efficientdet_d3.pth | 47.1 | TBD | 47.2 | 47.5 | 12.0 |
+| tf_efficientdet_d4.pth | 49.2 | TBD | 49.3 | 49.7 | 20.7 |
+| tf_efficientdet_d5.pth | 51.2 | TBD | 51.2 | 51.5 | 33.7 |
+| tf_efficientdet_d6.pth | 52.0 | TBD | 52.1 | 52.6 | 51.9 |
+| tf_efficientdet_d7.pth | 53.1 | 53.4 | 53.4 | 53.7 | 51.9 |
+| tf_efficientdet_d7x.pth | 54.3 | TBD | 54.4 | 55.1 | 77.1 |
+
 
 See [model configurations](effdet/config/model_config.py) for model checkpoint urls and differences.
 

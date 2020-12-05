@@ -206,7 +206,7 @@ efficientdet_model_param_dict = dict(
         separable_conv=False,
         head_bn_level_first=True,
         backbone_args=dict(drop_path_rate=0.2),
-        url='',
+        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/cspresdext50pan-92fdd094.pth',
     ),
     cspdarkdet53=dict(
         name='cspdarkdet53',
@@ -309,7 +309,7 @@ efficientdet_model_param_dict = dict(
         redundant_bias=False,
         head_bn_level_first=True,
         backbone_args=dict(drop_path_rate=0.1),
-        url='',
+        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/efficientdet_q0-bdf1bdb5.pth',
     ),
     efficientdet_q1=dict(
         name='efficientdet_q1',
@@ -323,7 +323,7 @@ efficientdet_model_param_dict = dict(
         redundant_bias=False,
         head_bn_level_first=True,
         backbone_args=dict(drop_path_rate=0.2),
-        url='',
+        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/efficientdet_q1-b238aba5.pth',
     ),
     efficientdet_q2=dict(
         name='efficientdet_q2',
@@ -337,7 +337,7 @@ efficientdet_model_param_dict = dict(
         redundant_bias=False,
         head_bn_level_first=True,
         backbone_args=dict(drop_path_rate=0.2),
-        url='',  # no pretrained weights yet
+        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/efficientdet_q2-0f7564e5.pth',
     ),
     efficientdet_w0=dict(
         name='efficientdet_w0',  # 'wide'
