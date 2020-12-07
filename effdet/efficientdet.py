@@ -7,15 +7,16 @@ Hacked together by Ross Wightman
 """
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import logging
 import math
 from collections import OrderedDict
-from typing import List, Callable
+from typing import List, Callable, Optional, Union, Tuple
 from functools import partial
 
 
 from timm import create_model
-from timm.models.layers import create_conv2d, drop_path, create_pool2d, Swish, get_act_layer
+from timm.models.layers import create_conv2d, create_pool2d, Swish, get_act_layer
 from .config import get_fpn_config, set_config_writeable, set_config_readonly
 
 _DEBUG = False
@@ -78,12 +79,68 @@ class SeparableConv2d(nn.Module):
         return x
 
 
+class Interpolate2d(nn.Module):
+    r"""Resamples a 2d Image
+
+    The input data is assumed to be of the form
+    `minibatch x channels x [optional depth] x [optional height] x width`.
+    Hence, for spatial inputs, we expect a 4D Tensor and for volumetric inputs, we expect a 5D Tensor.
+
+    The algorithms available for upsampling are nearest neighbor and linear,
+    bilinear, bicubic and trilinear for 3D, 4D and 5D input Tensor,
+    respectively.
+
+    One can either give a :attr:`scale_factor` or the target output :attr:`size` to
+    calculate the output size. (You cannot give both, as it is ambiguous)
+
+    Args:
+        size (int or Tuple[int] or Tuple[int, int] or Tuple[int, int, int], optional):
+            output spatial sizes
+        scale_factor (float or Tuple[float] or Tuple[float, float] or Tuple[float, float, float], optional):
+            multiplier for spatial size. Has to match input size if it is a tuple.
+        mode (str, optional): the upsampling algorithm: one of ``'nearest'``,
+            ``'linear'``, ``'bilinear'``, ``'bicubic'`` and ``'trilinear'``.
+            Default: ``'nearest'``
+        align_corners (bool, optional): if ``True``, the corner pixels of the input
+            and output tensors are aligned, and thus preserving the values at
+            those pixels. This only has effect when :attr:`mode` is
+            ``'linear'``, ``'bilinear'``, or ``'trilinear'``. Default: ``False``
+    """
+    __constants__ = ['size', 'scale_factor', 'mode', 'align_corners', 'name']
+    name: str
+    size: Optional[Union[int, Tuple[int, int]]]
+    scale_factor: Optional[Union[float, Tuple[float, float]]]
+    mode: str
+    align_corners: Optional[bool]
+
+    def __init__(self,
+                 size: Optional[Union[int, Tuple[int, int]]] = None,
+                 scale_factor: Optional[Union[float, Tuple[float, float]]] = None,
+                 mode: str = 'nearest',
+                 align_corners: bool = False) -> None:
+        super(Interpolate2d, self).__init__()
+        self.name = type(self).__name__
+        self.size = size
+        if isinstance(scale_factor, tuple):
+            self.scale_factor = tuple(float(factor) for factor in scale_factor)
+        else:
+            self.scale_factor = float(scale_factor) if scale_factor else None
+        self.mode = mode
+        self.align_corners = None if mode == 'nearest' else align_corners
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        return F.interpolate(
+            input, self.size, self.scale_factor, self.mode, self.align_corners, recompute_scale_factor=True)
+
+
 class ResampleFeatureMap(nn.Sequential):
 
-    def __init__(self, in_channels, out_channels, reduction_ratio=1., pad_type='', pooling_type='max',
-                 norm_layer=nn.BatchNorm2d, apply_bn=False, conv_after_downsample=False, redundant_bias=False):
+    def __init__(
+            self, in_channels, out_channels, reduction_ratio=1., pad_type='', downsample=None, upsample=None,
+            norm_layer=nn.BatchNorm2d, apply_bn=False, conv_after_downsample=False, redundant_bias=False):
         super(ResampleFeatureMap, self).__init__()
-        pooling_type = pooling_type or 'max'
+        downsample = downsample or 'max'
+        upsample = upsample or 'nearest'
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.reduction_ratio = reduction_ratio
@@ -97,13 +154,15 @@ class ResampleFeatureMap(nn.Sequential):
                 bias=not apply_bn or redundant_bias, act_layer=None)
 
         if reduction_ratio > 1:
-            stride_size = int(reduction_ratio)
             if conv is not None and not self.conv_after_downsample:
                 self.add_module('conv', conv)
-            self.add_module(
-                'downsample',
-                create_pool2d(
-                    pooling_type, kernel_size=stride_size + 1, stride=stride_size, padding=pad_type))
+            if downsample in ('max', 'avg'):
+                stride_size = int(reduction_ratio)
+                downsample = create_pool2d(
+                     downsample, kernel_size=stride_size + 1, stride=stride_size, padding=pad_type)
+            else:
+                downsample = Interpolate2d(scale_factor=1./reduction_ratio, mode=downsample)
+            self.add_module('downsample', downsample)
             if conv is not None and self.conv_after_downsample:
                 self.add_module('conv', conv)
         else:
@@ -111,7 +170,7 @@ class ResampleFeatureMap(nn.Sequential):
                 self.add_module('conv', conv)
             if reduction_ratio < 1:
                 scale = int(1 // reduction_ratio)
-                self.add_module('upsample', nn.UpsamplingNearest2d(scale_factor=scale))
+                self.add_module('upsample', Interpolate2d(scale_factor=scale, mode=upsample))
 
     # def forward(self, x):
     #     #  here for debugging only
@@ -132,7 +191,7 @@ class ResampleFeatureMap(nn.Sequential):
 
 class FpnCombine(nn.Module):
     def __init__(self, feature_info, fpn_config, fpn_channels, inputs_offsets, target_reduction, pad_type='',
-                 pooling_type='max', norm_layer=nn.BatchNorm2d, apply_bn_for_resampling=False,
+                 downsample=None, upsample=None, norm_layer=nn.BatchNorm2d, apply_resample_bn=False,
                  conv_after_downsample=False, redundant_bias=False, weight_method='attn'):
         super(FpnCombine, self).__init__()
         self.inputs_offsets = inputs_offsets
@@ -150,7 +209,7 @@ class FpnCombine(nn.Module):
             reduction_ratio = target_reduction / input_reduction
             self.resample[str(offset)] = ResampleFeatureMap(
                 in_channels, fpn_channels, reduction_ratio=reduction_ratio, pad_type=pad_type,
-                pooling_type=pooling_type, norm_layer=norm_layer, apply_bn=apply_bn_for_resampling,
+                downsample=downsample, upsample=upsample, norm_layer=norm_layer, apply_bn=apply_resample_bn,
                 conv_after_downsample=conv_after_downsample, redundant_bias=redundant_bias)
 
         if weight_method == 'attn' or weight_method == 'fastattn':
@@ -197,8 +256,8 @@ class Fnode(nn.Module):
 
 class BiFpnLayer(nn.Module):
     def __init__(self, feature_info, fpn_config, fpn_channels, num_levels=5, pad_type='',
-                 pooling_type='max', norm_layer=nn.BatchNorm2d, act_layer=_ACT_LAYER,
-                 apply_bn_for_resampling=False, conv_after_downsample=True, conv_bn_relu_pattern=False,
+                 downsample=None, upsample=None, norm_layer=nn.BatchNorm2d, act_layer=_ACT_LAYER,
+                 apply_resample_bn=False, conv_after_downsample=True, conv_bn_relu_pattern=False,
                  separable_conv=True, redundant_bias=False):
         super(BiFpnLayer, self).__init__()
         self.num_levels = num_levels
@@ -211,8 +270,8 @@ class BiFpnLayer(nn.Module):
             reduction = fnode_cfg['reduction']
             combine = FpnCombine(
                 feature_info, fpn_config, fpn_channels, tuple(fnode_cfg['inputs_offsets']),
-                target_reduction=reduction, pad_type=pad_type, pooling_type=pooling_type, norm_layer=norm_layer,
-                apply_bn_for_resampling=apply_bn_for_resampling, conv_after_downsample=conv_after_downsample,
+                target_reduction=reduction, pad_type=pad_type, downsample=downsample, upsample=upsample,
+                norm_layer=norm_layer, apply_resample_bn=apply_resample_bn, conv_after_downsample=conv_after_downsample,
                 redundant_bias=redundant_bias, weight_method=fnode_cfg['weight_method'])
 
             after_combine = nn.Sequential()
@@ -261,10 +320,11 @@ class BiFpn(nn.Module):
                     in_channels=in_chs,
                     out_channels=config.fpn_channels,
                     pad_type=config.pad_type,
-                    pooling_type=config.pooling_type,
+                    downsample=config.downsample_type,
+                    upsample=config.upsample_type,
                     norm_layer=norm_layer,
                     reduction_ratio=reduction_ratio,
-                    apply_bn=config.apply_bn_for_resampling,
+                    apply_bn=config.apply_resample_bn,
                     conv_after_downsample=config.conv_after_downsample,
                     redundant_bias=config.redundant_bias,
                 )
@@ -281,11 +341,12 @@ class BiFpn(nn.Module):
                 fpn_channels=config.fpn_channels,
                 num_levels=config.num_levels,
                 pad_type=config.pad_type,
-                pooling_type=config.pooling_type,
+                downsample=config.downsample_type,
+                upsample=config.upsample_type,
                 norm_layer=norm_layer,
                 act_layer=act_layer,
                 separable_conv=config.separable_conv,
-                apply_bn_for_resampling=config.apply_bn_for_resampling,
+                apply_resample_bn=config.apply_resample_bn,
                 conv_after_downsample=config.conv_after_downsample,
                 conv_bn_relu_pattern=config.conv_bn_relu_pattern,
                 redundant_bias=config.redundant_bias,
@@ -309,7 +370,8 @@ class HeadNet(nn.Module):
         norm_layer = config.norm_layer or nn.BatchNorm2d
         if config.norm_kwargs:
             norm_layer = partial(norm_layer, **config.norm_kwargs)
-        act_layer = get_act_layer(config.act_type) or _ACT_LAYER
+        act_type = config.head_act_type if getattr(config, 'head_act_type', None) else config.act_type
+        act_layer = get_act_layer(act_type) or _ACT_LAYER
 
         # Build convolution repeats
         conv_fn = SeparableConv2d if config.separable_conv else ConvBnAct2d

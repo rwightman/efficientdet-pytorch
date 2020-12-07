@@ -170,29 +170,38 @@ def create_loader(
         distributed=False,
         pin_mem=False,
         anchor_labeler=None,
+        transform_fn=None,
+        collate_fn=None,
 ):
     if isinstance(input_size, tuple):
         img_size = input_size[-2:]
     else:
         img_size = input_size
 
-    if is_training:
-        transform = transforms_coco_train(
-            img_size,
-            interpolation=interpolation,
-            use_prefetcher=use_prefetcher,
-            fill_color=fill_color,
-            mean=mean,
-            std=std)
+    if transform_fn is not None:
+        # transform_fn should accept inputs (img, annotations) from the dataset and return a tuple
+        # of img, annotations for the data loader collate function.
+        # The valid types of img and annotations depend on the dataset and collate abstractions used.
+        # The default dataset outputs PIL Image and dict of numpy ndarrays or python scalar annotations.
+        # The fast collate fn accepts ONLY numpy uint8 images and annotations dicts of ndarrays and python scalars
+        transform = transform_fn
     else:
-        transform = transforms_coco_eval(
-            img_size,
-            interpolation=interpolation,
-            use_prefetcher=use_prefetcher,
-            fill_color=fill_color,
-            mean=mean,
-            std=std)
-
+        if is_training:
+            transform = transforms_coco_train(
+                img_size,
+                interpolation=interpolation,
+                use_prefetcher=use_prefetcher,
+                fill_color=fill_color,
+                mean=mean,
+                std=std)
+        else:
+            transform = transforms_coco_eval(
+                img_size,
+                interpolation=interpolation,
+                use_prefetcher=use_prefetcher,
+                fill_color=fill_color,
+                mean=mean,
+                std=std)
     dataset.transform = transform
 
     sampler = None
@@ -204,7 +213,7 @@ def create_loader(
             # of samples per-process, will slightly alter validation results
             sampler = OrderedDistributedSampler(dataset)
 
-    collate_fn = DetectionFastCollate(anchor_labeler=anchor_labeler)
+    collate_fn = collate_fn or DetectionFastCollate(anchor_labeler=anchor_labeler)
     loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,

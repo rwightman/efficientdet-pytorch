@@ -5,7 +5,6 @@ Hacked together by Ross Wightman
 from typing import Optional, Dict, List
 import torch
 import torch.nn as nn
-from timm.utils import ModelEma
 from .anchors import Anchors, AnchorLabeler, generate_detections, MAX_DETECTION_POINTS
 from .loss import DetectionLoss
 
@@ -133,9 +132,7 @@ class DetBenchTrain(nn.Module):
 def unwrap_bench(model):
     # Unwrap a model in support bench so that various other fns can access the weights and attribs of the
     # underlying model directly
-    if isinstance(model, ModelEma):  # unwrap ModelEma
-        return unwrap_bench(model.ema)
-    elif hasattr(model, 'module'):  # unwrap DDP
+    if hasattr(model, 'module'):  # unwrap DDP or EMA
         return unwrap_bench(model.module)
     elif hasattr(model, 'model'):  # unwrap Bench -> model
         return unwrap_bench(model.model)

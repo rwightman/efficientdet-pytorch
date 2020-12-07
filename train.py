@@ -152,7 +152,7 @@ parser.add_argument('--train-interpolation', type=str, default='random',
 # loss
 parser.add_argument('--smoothing', type=float, default=None, help='override model config label smoothing')
 add_bool_arg(parser, 'jit-loss', default=None, help='override model config for torchscript jit loss fn')
-add_bool_arg(parser, 'new-focal', default=None, help='override model config to use legacy focal loss')
+add_bool_arg(parser, 'legacy-focal', default=None, help='override model config to use legacy focal loss')
 
 # Model Exponential Moving Average
 parser.add_argument('--model-ema', action='store_true', default=False,
@@ -187,6 +187,8 @@ parser.add_argument('--pin-mem', action='store_true', default=False,
                     help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
 parser.add_argument('--no-prefetcher', action='store_true', default=False,
                     help='disable fast prefetcher')
+parser.add_argument('--torchscript', dest='torchscript', action='store_true',
+                    help='convert model torchscript for inference')
 add_bool_arg(parser, 'bench-labeler', default=False,
              help='label targets in model bench, increases GPU load at expense of loader processes')
 parser.add_argument('--output', default='', type=str, metavar='PATH',
@@ -273,7 +275,7 @@ def main():
         pretrained_backbone=args.pretrained_backbone,
         redundant_bias=args.redundant_bias,
         label_smoothing=args.smoothing,
-        new_focal=args.new_focal,
+        legacy_focal=args.legacy_focal,
         jit_loss=args.jit_loss,
         bench_labeler=args.bench_labeler,
         checkpoint_path=args.initial_checkpoint,
@@ -286,6 +288,21 @@ def main():
     model.cuda()
     if args.channels_last:
         model = model.to(memory_format=torch.channels_last)
+
+    if args.distributed and args.sync_bn:
+        if has_apex and use_amp != 'native':
+            model = convert_syncbn_model(model)
+        else:
+            model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
+        if args.local_rank == 0:
+            logging.info(
+                'Converted model to use Synchronized BatchNorm. WARNING: You may have issues if using '
+                'zero initialized BN layers (enabled by default for ResNets) while sync-bn enabled.')
+
+    if args.torchscript:
+        assert not use_amp == 'apex', 'Cannot use APEX AMP with torchscripted model'
+        assert not args.sync_bn, 'Cannot use SyncBatchNorm with torchscripted model'
+        model = torch.jit.script(model)
 
     optimizer = create_optimizer(args, model)
 
@@ -317,24 +334,11 @@ def main():
     model_ema = None
     if args.model_ema:
         # Important to create EMA model after cuda(), DP wrapper, and AMP but before SyncBN and DDP wrapper
-        model_ema = ModelEma(model, decay=args.model_ema_decay)
+        model_ema = ModelEmaV2(model, decay=args.model_ema_decay)
         if args.resume:
-            # FIXME bit of a mess with bench, cannot use the load in ModelEma
             load_checkpoint(unwrap_bench(model_ema), args.resume, use_ema=True)
 
     if args.distributed:
-        if args.sync_bn:
-            try:
-                if has_apex and use_amp != 'native':
-                    model = convert_syncbn_model(model)
-                else:
-                    model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
-                if args.local_rank == 0:
-                    logging.info(
-                        'Converted model to use Synchronized BatchNorm. WARNING: You may have issues if using '
-                        'zero initialized BN layers (enabled by default for ResNets) while sync-bn enabled.')
-            except Exception as e:
-                logging.error('Failed to enable Synchronized BatchNorm. Install Apex or Torch >= 1.1')
         if has_apex and use_amp != 'native':
             if args.local_rank == 0:
                 logging.info("Using apex DistributedDataParallel.")
@@ -343,7 +347,11 @@ def main():
             if args.local_rank == 0:
                 logging.info("Using torch DistributedDataParallel.")
             model = NativeDDP(model, device_ids=[args.device])
-        # NOTE: EMA model does not need to be wrapped by DDP
+        # NOTE: EMA model does not need to be wrapped by DDP...
+        if model_ema is not None and not args.resume:
+            # ...but it is a good idea to sync EMA copy of weights
+            # NOTE: ModelEma init could be moved after DDP wrapper if using PyTorch DDP, not Apex.
+            model_ema.set(model)
 
     lr_scheduler, num_epochs = create_scheduler(args, optimizer)
     start_epoch = 0
@@ -407,7 +415,7 @@ def main():
                 if args.distributed and args.dist_bn in ('broadcast', 'reduce'):
                     distribute_bn(model_ema, args.world_size, args.dist_bn == 'reduce')
 
-                eval_metrics = validate(model_ema.ema, loader_eval, args, evaluator, log_suffix=' (EMA)')
+                eval_metrics = validate(model_ema.module, loader_eval, args, evaluator, log_suffix=' (EMA)')
             else:
                 eval_metrics = validate(model, loader_eval, args, evaluator)
 
@@ -429,7 +437,25 @@ def main():
         logging.info('*** Best metric: {0} (epoch {1})'.format(best_metric, best_epoch))
 
 
-def create_datasets_and_loaders(args, model_config):
+def create_datasets_and_loaders(
+        args,
+        model_config,
+        transform_train_fn=None,
+        transform_eval_fn=None,
+        collate_fn=None,
+):
+    """ Setup datasets, transforms, loaders, evaluator.
+
+    Args:
+        args: Command line args / config for training
+        model_config: Model specific configuration dict / struct
+        transform_train_fn: Override default image + annotation transforms (see note in loaders.py)
+        transform_eval_fn: Override default image + annotation transforms (see note in loaders.py)
+        collate_fn: Override default fast collate function
+
+    Returns:
+        Train loader, validation loader, evaluator
+    """
     input_config = resolve_input_config(args, model_config=model_config)
 
     dataset_train, dataset_eval = create_dataset(args.dataset, args.root)
@@ -459,6 +485,8 @@ def create_datasets_and_loaders(args, model_config):
         distributed=args.distributed,
         pin_mem=args.pin_mem,
         anchor_labeler=labeler,
+        transform_fn=transform_train_fn,
+        collate_fn=collate_fn,
     )
 
     if args.val_skip > 1:
@@ -477,6 +505,8 @@ def create_datasets_and_loaders(args, model_config):
         distributed=args.distributed,
         pin_mem=args.pin_mem,
         anchor_labeler=labeler,
+        transform_fn=transform_eval_fn,
+        collate_fn=collate_fn,
     )
 
     evaluator = create_evaluator(args.dataset, loader_eval.dataset, distributed=args.distributed, pred_yxyx=False)

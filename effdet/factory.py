@@ -23,7 +23,7 @@ def create_model_from_config(
         pretrained_backbone = False  # no point in loading backbone weights
 
     # Config overrides, override some config values via kwargs.
-    overrides = ('redundant_bias', 'label_smoothing', 'new_focal', 'jit_loss')
+    overrides = ('redundant_bias', 'label_smoothing', 'legacy_focal', 'jit_loss')
     for ov in overrides:
         value = kwargs.pop(ov, None)
         if value is not None:
