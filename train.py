@@ -300,8 +300,8 @@ def main():
                 'zero initialized BN layers (enabled by default for ResNets) while sync-bn enabled.')
 
     if args.torchscript:
-        assert not use_amp == 'apex', 'Cannot use APEX AMP with torchscripted model'
-        assert not args.sync_bn, 'Cannot use SyncBatchNorm with torchscripted model'
+        assert not use_amp == 'apex', 'Cannot use APEX AMP with torchscripted model, force native amp with `--native-amp` flag'
+        assert not args.sync_bn, 'Cannot use SyncBatchNorm with torchscripted model. Use `--dist-bn reduce` instead of `--sync-bn`'
         model = torch.jit.script(model)
 
     optimizer = create_optimizer(args, model)
