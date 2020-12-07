@@ -152,7 +152,7 @@ parser.add_argument('--train-interpolation', type=str, default='random',
 # loss
 parser.add_argument('--smoothing', type=float, default=None, help='override model config label smoothing')
 add_bool_arg(parser, 'jit-loss', default=None, help='override model config for torchscript jit loss fn')
-add_bool_arg(parser, 'new-focal', default=None, help='override model config to use legacy focal loss')
+add_bool_arg(parser, 'legacy-focal', default=None, help='override model config to use legacy focal loss')
 
 # Model Exponential Moving Average
 parser.add_argument('--model-ema', action='store_true', default=False,
@@ -275,7 +275,7 @@ def main():
         pretrained_backbone=args.pretrained_backbone,
         redundant_bias=args.redundant_bias,
         label_smoothing=args.smoothing,
-        new_focal=args.new_focal,
+        legacy_focal=args.legacy_focal,
         jit_loss=args.jit_loss,
         bench_labeler=args.bench_labeler,
         checkpoint_path=args.initial_checkpoint,

@@ -154,7 +154,7 @@ def loss_fn(
         delta: float,
         box_loss_weight: float,
         label_smoothing: float = 0.,
-        new_focal: bool = False,
+        legacy_focal: bool = False,
         ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Computes total detection loss.
     Computes total detection loss including box and class loss from all levels.
@@ -195,14 +195,14 @@ def loss_fn(
         bs, height, width, _, _ = cls_targets_at_level_oh.shape
         cls_targets_at_level_oh = cls_targets_at_level_oh.view(bs, height, width, -1)
         cls_outputs_at_level = cls_outputs[l].permute(0, 2, 3, 1).float()
-        if new_focal:
-            cls_loss = new_focal_loss(
-                cls_outputs_at_level, cls_targets_at_level_oh,
-                alpha=alpha, gamma=gamma, normalizer=num_positives_sum, label_smoothing=label_smoothing)
-        else:
+        if legacy_focal:
             cls_loss = focal_loss_legacy(
                 cls_outputs_at_level, cls_targets_at_level_oh,
                 alpha=alpha, gamma=gamma, normalizer=num_positives_sum)
+        else:
+            cls_loss = new_focal_loss(
+                cls_outputs_at_level, cls_targets_at_level_oh,
+                alpha=alpha, gamma=gamma, normalizer=num_positives_sum, label_smoothing=label_smoothing)
         cls_loss = cls_loss.view(bs, height, width, -1, num_classes)
         cls_loss = cls_loss * (cls_targets_at_level != -2).unsqueeze(-1)
         cls_losses.append(cls_loss.sum())   # FIXME reference code added a clamp here at some point ...clamp(0, 2))
@@ -236,7 +236,7 @@ class DetectionLoss(nn.Module):
         self.delta = config.delta
         self.box_loss_weight = config.box_loss_weight
         self.label_smoothing = config.label_smoothing
-        self.new_focal = config.new_focal
+        self.legacy_focal = config.legacy_focal
         self.use_jit = config.jit_loss
 
     def forward(
@@ -256,4 +256,4 @@ class DetectionLoss(nn.Module):
         return l_fn(
             cls_outputs, box_outputs, cls_targets, box_targets, num_positives,
             num_classes=self.num_classes, alpha=self.alpha, gamma=self.gamma, delta=self.delta,
-            box_loss_weight=self.box_loss_weight, label_smoothing=self.label_smoothing, new_focal=self.new_focal)
+            box_loss_weight=self.box_loss_weight, label_smoothing=self.label_smoothing, legacy_focal=self.legacy_focal)
