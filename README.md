@@ -114,7 +114,7 @@ The table below contains models with pretrained weights. There are quite a numbe
 | efficientdet_d1.pth | 39.4 | 39.5 | 39.1 | 39.6 | 6.62 |
 | tf_efficientdet_d1.pth | 40.1 | TBD | 40.2 | 40.5 | 6.63 |
 | efficientdet_q1.pth | 40.6 | TBD | N/A | N/A | 6.98 |
-| resdext50pan | 41.2 | TBD | N/A | N/A | 22.2 |
+| cspresdext50pan | 41.2 | TBD | N/A | N/A | 22.2 |
 | resdet50 | 41.6 | TBD | N/A | N/A | 27.6 |
 | efficientdet_q2.pth | 43.1 | TBD | N/A | N/A | 8.81 |
 | tf_efficientdet_d2.pth | 43.4 | TBD | 42.5 | 43 | 8.10 |
