@@ -570,5 +570,5 @@ def get_efficientdet_config(model_name='tf_efficientdet_d1'):
     h.update(efficientdet_model_param_dict[model_name])
     h.num_levels = h.max_level - h.min_level + 1
     h = deepcopy(h)  # may be unnecessary, ensure no references to param dict values
-    OmegaConf.set_struct(h, True)
+    # OmegaConf.set_struct(h, True)  # FIXME good idea?
     return h
