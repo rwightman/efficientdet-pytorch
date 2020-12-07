@@ -18,7 +18,7 @@ Aside from the default model configs, there is a lot of flexibility to facilitat
 
 ### 2020-12-07
 * Training w/ fully jit scripted model + bench (`--torchscript`) is possible with inclusion of ModelEmaV2 from `timm` and previous torchscript compat additions. Big speed gains for CPU bound training.
-* Add weights for alternate FPN layouts. QuadFPN experiments (`efficientdet_q0/q1/q2`) and CSPResDeXt + PAN (`cspresdext50pan`). See updated table below.
+* Add weights for alternate FPN layouts. QuadFPN experiments (`efficientdet_q0/q1/q2`) and CSPResDeXt + PAN (`cspresdext50pan`). See updated table below. Special thanks to [Artus](https://twitter.com/artuskg) for providing resources for training the Q2 model.
 * Heads can have a different activation from FPN via config
 * FPN resample (interpolation) can be specified via config and include any F.interpolation method or `max`/`avg` pool
 * Default focal loss changed back to `new_focal`, use `--legacy-focal` arg to use the original. Legacy uses less memory, but has more numerical stability issues.
