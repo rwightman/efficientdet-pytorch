@@ -51,6 +51,7 @@ parser.add_argument('--model', '-m', metavar='MODEL', default='tf_efficientdet_d
                     help='model architecture (default: tf_efficientdet_d1)')
 add_bool_arg(parser, 'redundant-bias', default=None,
                     help='override model config for redundant bias layers')
+add_bool_arg(parser, 'soft-nms', default=None, help='override model config for soft-nms')
 parser.add_argument('--num-classes', type=int, default=None, metavar='N',
                     help='Override num_classes in model config if set. For fine-tuning from pretrained.')
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
@@ -112,6 +113,7 @@ def validate(args):
         num_classes=args.num_classes,
         pretrained=args.pretrained,
         redundant_bias=args.redundant_bias,
+        soft_nms=args.soft_nms,
         checkpoint_path=args.checkpoint,
         checkpoint_ema=args.use_ema,
     )

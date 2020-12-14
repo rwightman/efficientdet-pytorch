@@ -70,6 +70,11 @@ def default_detection_model_configs():
     h.delta = 0.1
     h.box_loss_weight = 50.0
 
+    # nms
+    h.soft_nms = False  # use soft-nms, this is incredibly slow
+    h.max_detection_points = 5000  # max detections for post process, input to NMS
+    h.max_det_per_image = 100  # max detections per image limit, output of NMS
+
     return h
 
 

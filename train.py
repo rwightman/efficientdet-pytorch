@@ -63,7 +63,7 @@ parser.add_argument('--dataset', default='coco', type=str, metavar='DATASET',
 parser.add_argument('--model', default='tf_efficientdet_d1', type=str, metavar='MODEL',
                     help='Name of model to train (default: "tf_efficientdet_d1"')
 add_bool_arg(parser, 'redundant-bias', default=None, help='override model config for redundant bias')
-parser.set_defaults(redundant_bias=None)
+add_bool_arg(parser, 'soft-nms', default=None, help='override model config for soft-nms')
 parser.add_argument('--val-skip', type=int, default=0, metavar='N',
                     help='Skip every N validation samples.')
 parser.add_argument('--num-classes', type=int, default=None, metavar='N',
@@ -277,6 +277,7 @@ def main():
         label_smoothing=args.smoothing,
         legacy_focal=args.legacy_focal,
         jit_loss=args.jit_loss,
+        soft_nms=args.soft_nms,
         bench_labeler=args.bench_labeler,
         checkpoint_path=args.initial_checkpoint,
     )

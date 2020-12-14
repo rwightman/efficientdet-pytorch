@@ -43,12 +43,6 @@ MIN_CLASS_SCORE = -5.0
 # The score for a dummy detection
 _DUMMY_DETECTION_SCORE = -1e5
 
-# The maximum number of (anchor,class) pairs to keep for non-max suppression.
-MAX_DETECTION_POINTS = 5000
-
-# The maximum number of detections per image.
-MAX_DETECTIONS_PER_IMAGE = 100
-
 
 def decode_box_outputs(rel_codes, anchors, output_xyxy: bool=False):
     """Transforms relative regression coordinates to absolute positions.
@@ -97,17 +91,17 @@ def clip_boxes_xyxy(boxes: torch.Tensor, size: torch.Tensor):
 def generate_detections(
         cls_outputs, box_outputs, anchor_boxes, indices, classes,
         img_scale: Optional[torch.Tensor], img_size: Optional[torch.Tensor],
-        max_det_per_image: int = MAX_DETECTIONS_PER_IMAGE, soft_nms: bool = False):
+        max_det_per_image: int = 100, soft_nms: bool = False):
     """Generates detections with RetinaNet model outputs and anchors.
 
     Args:
         cls_outputs: a torch tensor with shape [N, 1], which has the highest class
             scores on all feature levels. The N is the number of selected
-            top-K total anchors on all levels.  (k being MAX_DETECTION_POINTS)
+            top-K total anchors on all levels.
 
         box_outputs: a torch tensor with shape [N, 4], which stacks box regression
             outputs on all feature levels. The N is the number of selected top-k
-            total anchors on all levels. (k being MAX_DETECTION_POINTS)
+            total anchors on all levels.
 
         anchor_boxes: a torch tensor with shape [N, 4], which stacks anchors on all
             feature levels. The N is the number of selected top-k total anchors on all levels.
@@ -124,7 +118,7 @@ def generate_detections(
         max_det_per_image: an int constant, added as argument to make torchscript happy
 
     Returns:
-        detections: detection results in a tensor with shape [MAX_DETECTION_POINTS, 6],
+        detections: detection results in a tensor with shape [max_det_per_image, 6],
             each row representing [x_min, y_min, x_max, y_max, score, class]
     """
     assert box_outputs.shape[-1] == 4
@@ -147,7 +141,7 @@ def generate_detections(
     else:
         top_detection_idx = batched_nms(boxes, scores, classes, iou_threshold=0.5)
 
-    # keep only topk scoring predictions
+    # keep only top max_det_per_image scoring predictions
     top_detection_idx = top_detection_idx[:max_det_per_image]
     boxes = boxes[top_detection_idx]
     scores = scores[top_detection_idx, None]
@@ -159,7 +153,7 @@ def generate_detections(
     # FIXME add option to convert boxes back to yxyx? Otherwise must be handled downstream if
     # that is the preferred output format.
 
-    # stack em and pad out to MAX_DETECTIONS_PER_IMAGE if necessary
+    # stack em and pad out to max_det_per_image if necessary
     num_det = len(top_detection_idx)
     detections = torch.cat([boxes, scores, classes.float()], dim=1)
     if num_det < max_det_per_image:
