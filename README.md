@@ -24,6 +24,7 @@ Aside from the default model configs, there is a lot of flexibility to facilitat
 * Default focal loss changed back to `new_focal`, use `--legacy-focal` arg to use the original. Legacy uses less memory, but has more numerical stability issues.
 * custom augmentation transform and collate fn can be passed to loader factory
 * `timm` >= 0.3.2 required, NOTE double check any custom defined model config for breaking change 
+* PyTorch >= 1.6 now required
 
 ### 2020-11-12
 * add experimental PAN and Quad FPN configs to the existing EfficientDet BiFPN w/ two test model configs
@@ -135,8 +136,8 @@ _NOTE: In training some experimental models, I've noticed some potential issues 
 ## Environment Setup
 
 Tested in a Python 3.7 or 3.8 conda environment in Linux with:
-* PyTorch 1.4, 1.6, or 1.7 (I recommend avoiding PyTorch 1.5 due to some jit and argmax issues)
-* PyTorch Image Models (timm) >= 0.3.0, `pip install timm` or local install from (https://github.com/rwightman/pytorch-image-models)
+* PyTorch 1.6, 1.7, 1.7.1
+* PyTorch Image Models (timm) >= 0.3.2, `pip install timm` or local install from (https://github.com/rwightman/pytorch-image-models)
 * Apex AMP master (as of 2020-08)
 
 *NOTE* - There is a conflict/bug with Numpy 1.18+ and pycocotools 2.0, force install numpy <= 1.17.5 or ensure you install pycocotools >= 2.0.2
