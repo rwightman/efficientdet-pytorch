@@ -294,7 +294,7 @@ class ObjectDetectionEvaluator(DetectionEvaluator):
                     pascal_metrics[display_name] = metrics['per_class_precision'][idx]
                     display_name = self._metric_prefix + 'PerformanceByCategory/Recall@{}IOU/{}'.format(
                         self._matching_iou_threshold, category_name)
-                    pascal_metrics[display_name] = metrics['per_class_precision'][idx]
+                    pascal_metrics[display_name] = metrics['per_class_recall'][idx]
 
                 # Optionally add CorLoc metrics.classes
                 if self._evaluate_corlocs:
