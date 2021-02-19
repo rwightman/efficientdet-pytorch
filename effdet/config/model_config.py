@@ -18,6 +18,7 @@ def default_detection_model_configs():
 
     h.backbone_name = 'tf_efficientnet_b1'
     h.backbone_args = None  # FIXME sort out kwargs vs config for backbone creation
+    h.backbone_indices = None
 
     # model specific, input preprocessing parameters
     h.image_size = (640, 640)
@@ -167,7 +168,7 @@ efficientdet_model_param_dict = dict(
     cspresdet50=dict(
         name='cspresdet50',
         backbone_name='cspresnet50',
-        image_size=(640, 640),
+        image_size=(768, 768),
         aspect_ratios=[1.0, 2.0, 0.5],
         fpn_channels=88,
         fpn_cell_repeats=4,
@@ -175,13 +176,13 @@ efficientdet_model_param_dict = dict(
         pad_type='',
         act_type='leaky_relu',
         head_act_type='silu',
-        downsample_type='max',
+        downsample_type='bilinear',
         upsample_type='bilinear',
         redundant_bias=False,
         separable_conv=False,
         head_bn_level_first=True,
         backbone_args=dict(drop_path_rate=0.2),
-        url='',
+        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/cspresdet50b-386da277.pth',
     ),
     cspresdext50=dict(
         name='cspresdext50',
@@ -230,7 +231,29 @@ efficientdet_model_param_dict = dict(
         separable_conv=False,
         head_bn_level_first=True,
         backbone_args=dict(drop_path_rate=0.2),
+        backbone_indices=(3, 4, 5),
         url='',
+    ),
+    cspdarkdet53m=dict(
+        name='cspdarkdet53m',
+        backbone_name='cspdarknet53',
+        image_size=(768, 768),
+        aspect_ratios=[1.0, 2.0, 0.5],
+        fpn_channels=96,
+        fpn_cell_repeats=4,
+        box_class_repeats=3,
+        pad_type='',
+        fpn_name='qufpn_fa',
+        act_type='leaky_relu',
+        head_act_type='mish',
+        downsample_type='bilinear',
+        upsample_type='bilinear',
+        redundant_bias=False,
+        separable_conv=False,
+        head_bn_level_first=True,
+        backbone_args=dict(drop_path_rate=0.2),
+        backbone_indices=(3, 4, 5),
+        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/cspdarkdet53m-79062b2d.pth',
     ),
     mixdet_m=dict(
         name='mixdet_m',
@@ -328,10 +351,12 @@ efficientdet_model_param_dict = dict(
         box_class_repeats=3,
         pad_type='',
         fpn_name='qufpn_fa',  # quad-fpn + fast attn experiment
+        downsample_type='bilinear',
+        upsample_type='bilinear',
         redundant_bias=False,
         head_bn_level_first=True,
         backbone_args=dict(drop_path_rate=0.2),
-        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/efficientdet_q1-b238aba5.pth',
+        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/efficientdet_q1b-d0612140.pth',
     ),
     efficientdet_q2=dict(
         name='efficientdet_q2',

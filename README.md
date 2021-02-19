@@ -16,6 +16,12 @@ Aside from the default model configs, there is a lot of flexibility to facilitat
 
 ## Updates
 
+### 2021-02-18
+* Add some new model weights with bilinear interpolation for upsample and downsample in FPN.
+  * 40.9 mAP - `efficientdet_q1`  (replace prev model at 40.6)
+  * 43.2 mAP -`cspresdet50`
+  * 45.2 mAP - `cspdarkdet5m`
+
 ### 2020-12-07
 * Training w/ fully jit scripted model + bench (`--torchscript`) is possible with inclusion of ModelEmaV2 from `timm` and previous torchscript compat additions. Big speed gains for CPU bound training.
 * Add weights for alternate FPN layouts. QuadFPN experiments (`efficientdet_q0/q1/q2`) and CSPResDeXt + PAN (`cspresdext50pan`). See updated table below. Special thanks to [Artus](https://twitter.com/artuskg) for providing resources for training the Q2 model.
@@ -114,11 +120,13 @@ The table below contains models with pretrained weights. There are quite a numbe
 | efficientdet_q0.pth | 35.7 | TBD | N/A | N/A | 4.13 |
 | efficientdet_d1.pth | 39.4 | 39.5 | 39.1 | 39.6 | 6.62 |
 | tf_efficientdet_d1.pth | 40.1 | TBD | 40.2 | 40.5 | 6.63 |
-| efficientdet_q1.pth | 40.6 | TBD | N/A | N/A | 6.98 |
+| efficientdet_q1.pth | 40.9 | TBD | N/A | N/A | 6.98 |
 | cspresdext50pan | 41.2 | TBD | N/A | N/A | 22.2 |
 | resdet50 | 41.6 | TBD | N/A | N/A | 27.6 |
 | efficientdet_q2.pth | 43.1 | TBD | N/A | N/A | 8.81 |
+| cspresdet50 | 43.2 | TBD | N/A | N/A | 24.3 |
 | tf_efficientdet_d2.pth | 43.4 | TBD | 42.5 | 43 | 8.10 |
+| cspdarkdet53m | 45.2 | TBD | N/A | N/A | 35.6 |
 | tf_efficientdet_d3.pth | 47.1 | TBD | 47.2 | 47.5 | 12.0 |
 | tf_efficientdet_d4.pth | 49.2 | TBD | 49.3 | 49.7 | 20.7 |
 | tf_efficientdet_d5.pth | 51.2 | TBD | 51.2 | 51.5 | 33.7 |

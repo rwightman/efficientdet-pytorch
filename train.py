@@ -40,6 +40,7 @@ from effdet import create_model, unwrap_bench, create_loader, create_dataset, cr
 from effdet.data import resolve_input_config, SkipSubset
 from effdet.anchors import Anchors, AnchorLabeler
 from timm.models import resume_checkpoint, load_checkpoint
+from timm.models.layers import set_layer_config
 from timm.utils import *
 from timm.optim import create_optimizer
 from timm.scheduler import create_scheduler
@@ -267,20 +268,21 @@ def main():
 
     torch.manual_seed(args.seed + args.rank)
 
-    model = create_model(
-        args.model,
-        bench_task='train',
-        num_classes=args.num_classes,
-        pretrained=args.pretrained,
-        pretrained_backbone=args.pretrained_backbone,
-        redundant_bias=args.redundant_bias,
-        label_smoothing=args.smoothing,
-        legacy_focal=args.legacy_focal,
-        jit_loss=args.jit_loss,
-        soft_nms=args.soft_nms,
-        bench_labeler=args.bench_labeler,
-        checkpoint_path=args.initial_checkpoint,
-    )
+    with set_layer_config(scriptable=args.torchscript):
+        model = create_model(
+            args.model,
+            bench_task='train',
+            num_classes=args.num_classes,
+            pretrained=args.pretrained,
+            pretrained_backbone=args.pretrained_backbone,
+            redundant_bias=args.redundant_bias,
+            label_smoothing=args.smoothing,
+            legacy_focal=args.legacy_focal,
+            jit_loss=args.jit_loss,
+            soft_nms=args.soft_nms,
+            bench_labeler=args.bench_labeler,
+            checkpoint_path=args.initial_checkpoint,
+        )
     model_config = model.config  # grab before we obscure with DP/DDP wrappers
 
     if args.local_rank == 0:

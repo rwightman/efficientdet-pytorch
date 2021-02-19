@@ -11,9 +11,8 @@ from contextlib import suppress
 
 from effdet import create_model, create_evaluator, create_dataset, create_loader
 from effdet.data import resolve_input_config
-from effdet.evaluator import CocoEvaluator, PascalEvaluator
 from timm.utils import AverageMeter, setup_default_logging
-
+from timm.models.layers import set_layer_config
 
 has_apex = False
 try:
@@ -107,16 +106,17 @@ def validate(args):
     args.prefetcher = not args.no_prefetcher
 
     # create model
-    bench = create_model(
-        args.model,
-        bench_task='predict',
-        num_classes=args.num_classes,
-        pretrained=args.pretrained,
-        redundant_bias=args.redundant_bias,
-        soft_nms=args.soft_nms,
-        checkpoint_path=args.checkpoint,
-        checkpoint_ema=args.use_ema,
-    )
+    with set_layer_config(scriptable=args.torchscript):
+        bench = create_model(
+            args.model,
+            bench_task='predict',
+            num_classes=args.num_classes,
+            pretrained=args.pretrained,
+            redundant_bias=args.redundant_bias,
+            soft_nms=args.soft_nms,
+            checkpoint_path=args.checkpoint,
+            checkpoint_ema=args.use_ema,
+        )
     model_config = bench.config
 
     param_count = sum([m.numel() for m in bench.parameters()])

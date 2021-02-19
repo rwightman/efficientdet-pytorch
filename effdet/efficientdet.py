@@ -557,7 +557,8 @@ class EfficientDet(nn.Module):
         self.config = config
         set_config_readonly(self.config)
         self.backbone = create_model(
-            config.backbone_name, features_only=True, out_indices=(2, 3, 4),
+            config.backbone_name, features_only=True,
+            out_indices=self.config.backbone_indices or (2, 3, 4),
             pretrained=pretrained_backbone, **config.backbone_args)
         feature_info = get_feature_info(self.backbone)
         self.fpn = BiFpn(self.config, feature_info)
