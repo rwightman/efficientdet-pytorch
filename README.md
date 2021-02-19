@@ -20,7 +20,7 @@ Aside from the default model configs, there is a lot of flexibility to facilitat
 * Add some new model weights with bilinear interpolation for upsample and downsample in FPN.
   * 40.9 mAP - `efficientdet_q1`  (replace prev model at 40.6)
   * 43.2 mAP -`cspresdet50`
-  * 45.2 mAP - `cspdarkdet5m`
+  * 45.2 mAP - `cspdarkdet53m`
 
 ### 2020-12-07
 * Training w/ fully jit scripted model + bench (`--torchscript`) is possible with inclusion of ModelEmaV2 from `timm` and previous torchscript compat additions. Big speed gains for CPU bound training.
