@@ -129,8 +129,7 @@ class Interpolate2d(nn.Module):
         self.align_corners = None if mode == 'nearest' else align_corners
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        return F.interpolate(
-            input, self.size, self.scale_factor, self.mode, self.align_corners, recompute_scale_factor=True)
+        return F.interpolate(input, self.size, self.scale_factor, self.mode, self.align_corners)
 
 
 class ResampleFeatureMap(nn.Sequential):
