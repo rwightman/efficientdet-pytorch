@@ -2,11 +2,13 @@
 
 Hacked together by Ross Wightman
 """
-import torch
-from PIL import Image
-import numpy as np
 import random
 import math
+from copy import deepcopy
+
+from PIL import Image
+import numpy as np
+import torch
 
 IMAGENET_DEFAULT_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_DEFAULT_STD = (0.229, 0.224, 0.225)
@@ -91,13 +93,13 @@ class ResizePad:
         new_img = Image.new("RGB", (self.target_size[1], self.target_size[0]), color=self.fill_color)
         interp_method = _pil_interp(self.interpolation)
         img = img.resize((scaled_w, scaled_h), interp_method)
-        new_img.paste(img)
+        new_img.paste(img)  # pastes at 0,0 (upper-left corner)
 
         if 'bbox' in anno:
-            # FIXME haven't tested this path since not currently using dataset annotations for train/eval
             bbox = anno['bbox']
             bbox[:, :4] *= img_scale
-            clip_boxes_(bbox, (scaled_h, scaled_w))
+            bbox_bound = (min(scaled_h, self.target_size[0]), min(scaled_w, self.target_size[1]))
+            clip_boxes_(bbox, bbox_bound)  # crop to bounds of target image or letter-box, whichever is smaller
             valid_indices = (bbox[:, :2] < bbox[:, 2:4]).all(axis=1)
             anno['bbox'] = bbox[valid_indices, :]
             anno['cls'] = anno['cls'][valid_indices]
@@ -151,15 +153,15 @@ class RandomResizePad:
         right, lower = min(scaled_w, offset_x + self.target_size[1]), min(scaled_h, offset_y + self.target_size[0])
         img = img.crop((offset_x, offset_y, right, lower))
         new_img = Image.new("RGB", (self.target_size[1], self.target_size[0]), color=self.fill_color)
-        new_img.paste(img)
+        new_img.paste(img)  # pastes at 0,0 (upper-left corner)
 
         if 'bbox' in anno:
-            # FIXME not fully tested
-            bbox = anno['bbox'].copy()  # FIXME copy for debugger inspection, back to inplace
+            bbox = anno['bbox']  # for convenience, modifies in-place
             bbox[:, :4] *= img_scale
             box_offset = np.stack([offset_y, offset_x] * 2)
             bbox -= box_offset
-            clip_boxes_(bbox, (scaled_h, scaled_w))
+            bbox_bound = (min(scaled_h, self.target_size[0]), min(scaled_w, self.target_size[1]))
+            clip_boxes_(bbox, bbox_bound)  # crop to bounds of target image or letter-box, whichever is smaller
             valid_indices = (bbox[:, :2] < bbox[:, 2:4]).all(axis=1)
             anno['bbox'] = bbox[valid_indices, :]
             anno['cls'] = anno['cls'][valid_indices]
