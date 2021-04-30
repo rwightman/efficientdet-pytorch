@@ -107,6 +107,9 @@ def validate(args):
 
     # create model
     with set_layer_config(scriptable=args.torchscript):
+        extra_args = {}
+        if args.img_size is not None:
+            extra_args = dict(image_size=(args.img_size, args.img_size))
         bench = create_model(
             args.model,
             bench_task='predict',
@@ -116,6 +119,7 @@ def validate(args):
             soft_nms=args.soft_nms,
             checkpoint_path=args.checkpoint,
             checkpoint_ema=args.use_ema,
+            **extra_args,
         )
     model_config = bench.config
 
