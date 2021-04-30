@@ -17,7 +17,8 @@ Aside from the default model configs, there is a lot of flexibility to facilitat
 ## Updates
 
 ### 2021-04-30
-* Add EfficientDet AdvProp-AA weights for D0-D5 from https://github.com/google/automl/blob/master/efficientdet/Det-AdvProp.md
+* Add EfficientDet AdvProp-AA weights for D0-D5 from TF impl. Model names `tf_efficientdet_d?_ap`
+ * See https://github.com/google/automl/blob/master/efficientdet/Det-AdvProp.md
 
 ### 2021-02-18
 * Add some new model weights with bilinear interpolation for upsample and downsample in FPN.
