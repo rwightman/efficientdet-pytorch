@@ -16,6 +16,11 @@ Aside from the default model configs, there is a lot of flexibility to facilitat
 
 ## Updates
 
+### 2021-07-28
+* Add training example to README provided by Chris Hughes for training w/ custom dataset & Lightning training code
+  * [Medium blog post](https://medium.com/data-science-at-microsoft/training-efficientdet-on-custom-data-with-pytorch-lightning-using-an-efficientnetv2-backbone-1cdf3bd7921f)
+  * [Python notebook](https://gist.github.com/Chris-hughes10/73628b1d8d6fc7d359b3dcbbbb8869d7)
+
 ### 2021-04-30
 * Add EfficientDet AdvProp-AA weights for D0-D5 from TF impl. Model names `tf_efficientdet_d?_ap`
   * See https://github.com/google/automl/blob/master/efficientdet/Det-AdvProp.md
@@ -273,7 +278,10 @@ The 500 (Challenge2019) or 601 (V5/V6) class head for OI takes up a LOT more GPU
 The models here have been used with custom training routines and datasets with great results. There are lots of details to figure out so please don't file any 'I get crap results on my custom dataset issues'. If you can illustrate a reproducible problem on a public, non-proprietary, downloadable dataset, with public github fork of this repo including working dataset/parser implementations, I MAY have time to take a look.
 
 Examples:
-* Alex Shonenkov has a clear and concise Kaggle kernel which illustrates fine-tuning these models for detecting wheat heads: https://www.kaggle.com/shonenkov/training-efficientdet (this is out of date wrt to latest versions here)
+* Chris Hughes has put together a great example of training w/ `timm` EfficientNetV2 backbones and the latest versions of the EfficientDet models here
+  * [Medium blog post](https://medium.com/data-science-at-microsoft/training-efficientdet-on-custom-data-with-pytorch-lightning-using-an-efficientnetv2-backbone-1cdf3bd7921f)
+  * [Python notebook](https://gist.github.com/Chris-hughes10/73628b1d8d6fc7d359b3dcbbbb8869d7)
+* Alex Shonenkov has a clear and concise Kaggle kernel which illustrates fine-tuning these models for detecting wheat heads: https://www.kaggle.com/shonenkov/training-efficientdet (NOTE: this is out of date wrt to latest versions here, many details have changed)
 
 If you have a good example script or kernel training these models with a different dataset, feel free to notify me for inclusion here...
 
