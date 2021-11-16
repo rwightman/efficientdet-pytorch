@@ -89,7 +89,7 @@ parser.add_argument('--native-amp', action='store_true', default=False,
                     help='Use Native Torch AMP mixed precision')
 parser.add_argument('--torchscript', dest='torchscript', action='store_true',
                     help='convert model torchscript for inference')
-parser.add_argument('--results', default='./results.json', type=str, metavar='FILENAME',
+parser.add_argument('--results', default='', type=str, metavar='FILENAME',
                     help='JSON filename for evaluation results')
 
 
@@ -181,7 +181,7 @@ def validate(args):
 
     mean_ap = 0.
     if dataset.parser.has_labels:
-        mean_ap = evaluator.evaluate()
+        mean_ap = evaluator.evaluate(output_result_file=args.results)
     else:
         evaluator.save(args.results)
 

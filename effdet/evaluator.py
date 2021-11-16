@@ -1,13 +1,16 @@
-import torch
-import torch.distributed as dist
+import os
 import abc
 import json
 import logging
 import time
-import numpy as np
+from tempfile import NamedTemporaryFile
 
-from .distributed import synchronize, is_main_process, all_gather_container
+import numpy as np
+import torch
+import torch.distributed as dist
+
 from pycocotools.cocoeval import COCOeval
+from .distributed import synchronize, is_main_process, all_gather_container
 
 # FIXME experimenting with speedups for OpenImages eval, it's slow
 #import pyximport; py_importer, pyx_importer = pyximport.install(pyimport=True)
@@ -74,7 +77,7 @@ class Evaluator:
         return coco_predictions, coco_ids
 
     @abc.abstractmethod
-    def evaluate(self):
+    def evaluate(self, output_result_file=''):
         pass
 
     def save(self, result_file):
@@ -96,12 +99,21 @@ class CocoEvaluator(Evaluator):
         self.img_indices = []
         self.predictions = []
 
-    def evaluate(self):
+    def evaluate(self, output_result_file=''):
         if not self.distributed or dist.get_rank() == 0:
             assert len(self.predictions)
             coco_predictions, coco_ids = self._coco_predictions()
-            json.dump(coco_predictions, open('./temp.json', 'w'), indent=4)
-            results = self.coco_api.loadRes('./temp.json')
+            if output_result_file:
+                json.dump(coco_predictions, open(output_result_file, 'w'), indent=4)
+                results = self.coco_api.loadRes(output_result_file)
+            else:
+                with NamedTemporaryFile(prefix='coco_', suffix='.json', delete=False, mode='w') as tmpfile:
+                    json.dump(coco_predictions, tmpfile, indent=4)
+                results = self.coco_api.loadRes(tmpfile.name)
+                try:
+                    os.unlink(tmpfile.name)
+                except OSError:
+                    pass
             coco_eval = COCOeval(self.coco_api, results, 'bbox')
             coco_eval.params.imgIds = coco_ids  # score only ids we've used
             coco_eval.evaluate()
@@ -132,7 +144,7 @@ class TfmEvaluator(Evaluator):
         self.img_indices = []
         self.predictions = []
 
-    def evaluate(self):
+    def evaluate(self, output_result_file=''):
         if not self.distributed or dist.get_rank() == 0:
             for img_idx, img_dets in zip(self.img_indices, self.predictions):
                 gt = self._dataset.get_ann_info(img_idx)
@@ -156,6 +168,8 @@ class TfmEvaluator(Evaluator):
                 # wait without spinning the cpu @ 100%, no need for low latency here
                 time.sleep(0.5)
             map_metric = map_metric.item()
+        if output_result_file:
+            self.save(output_result_file)
         self.reset()
         return map_metric
 
