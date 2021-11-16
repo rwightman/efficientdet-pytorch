@@ -47,9 +47,7 @@ def default_detection_model_configs():
     h.fpn_channels = 88
     h.separable_conv = True
     h.apply_resample_bn = True
-    h.conv_after_downsample = False
     h.conv_bn_relu_pattern = False
-    h.use_native_resize_op = False
     h.downsample_type = 'max'
     h.upsample_type = 'nearest'
     h.redundant_bias = True  # original TF models have back to back bias + BN layers, not necessary!
@@ -77,6 +75,14 @@ def default_detection_model_configs():
     h.max_det_per_image = 100  # max detections per image limit, output of NMS
 
     return h
+
+
+tf_efficientdet_lite_common = dict(
+    fpn_name='bifpn_sum',
+    mean=(0.5, 0.5, 0.5),
+    std=(0.5, 0.5, 0.5),
+    act_type='relu6',
+)
 
 
 efficientdet_model_param_dict = dict(
@@ -441,11 +447,11 @@ efficientdet_model_param_dict = dict(
     efficientdet_lite0=dict(
         name='efficientdet_lite0',
         backbone_name='efficientnet_lite0',
-        image_size=(512, 512),
+        image_size=(384, 384),
         fpn_channels=64,
         fpn_cell_repeats=3,
         box_class_repeats=3,
-        act_type='relu',
+        act_type='relu6',
         redundant_bias=False,
         head_bn_level_first=True,
         backbone_args=dict(drop_path_rate=0.1),
@@ -635,60 +641,72 @@ efficientdet_model_param_dict = dict(
     tf_efficientdet_lite0=dict(
         name='tf_efficientdet_lite0',
         backbone_name='tf_efficientnet_lite0',
-        image_size=(512, 512),
+        image_size=(320, 320),
+        anchor_scale=3.0,
         fpn_channels=64,
         fpn_cell_repeats=3,
         box_class_repeats=3,
-        act_type='relu',
-        redundant_bias=False,
-        backbone_args=dict(drop_path_rate=0.1),
-        # unlike other tf_ models, this was not ported from tf automl impl, but trained from tf pretrained efficient lite
-        # weights using this code, will likely replace if/when official det-lite weights are released
-        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_lite0-f5f303a9.pth',
+        backbone_args=dict(drop_path_rate=0.),
+        **tf_efficientdet_lite_common,
+        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_lite0-dfacfc78.pth',
     ),
     tf_efficientdet_lite1=dict(
         name='tf_efficientdet_lite1',
         backbone_name='tf_efficientnet_lite1',
-        image_size=(640, 640),
+        image_size=(384, 384),
+        anchor_scale=3.0,
         fpn_channels=88,
         fpn_cell_repeats=4,
         box_class_repeats=3,
-        act_type='relu',
         backbone_args=dict(drop_path_rate=0.2),
-        url='',  # no pretrained weights yet
+        **tf_efficientdet_lite_common,
+        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_lite1-6dc7ab30.pth',
     ),
     tf_efficientdet_lite2=dict(
         name='tf_efficientdet_lite2',
         backbone_name='tf_efficientnet_lite2',
         image_size=(768, 768),
+        anchor_scale=3.0,
         fpn_channels=112,
         fpn_cell_repeats=5,
         box_class_repeats=3,
-        act_type='relu',
         backbone_args=dict(drop_path_rate=0.2),
-        url='',
+        **tf_efficientdet_lite_common,
+        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_lite2-86c5d55b.pth',
     ),
     tf_efficientdet_lite3=dict(
         name='tf_efficientdet_lite3',
         backbone_name='tf_efficientnet_lite3',
-        image_size=(896, 896),
+        image_size=(512, 512),
         fpn_channels=160,
         fpn_cell_repeats=6,
         box_class_repeats=4,
-        act_type='relu',
         backbone_args=dict(drop_path_rate=0.2),
-        url='',
+        **tf_efficientdet_lite_common,
+        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_lite3-506852cb.pth',
+    ),
+    tf_efficientdet_lite3x=dict(
+        name='tf_efficientdet_lite3x',
+        backbone_name='tf_efficientnet_lite3',
+        image_size=(640, 640),
+        anchor_scale=3.0,
+        fpn_channels=200,
+        fpn_cell_repeats=6,
+        box_class_repeats=4,
+        backbone_args=dict(drop_path_rate=0.2),
+        **tf_efficientdet_lite_common,
+        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_lite3x-8404c57b.pth',
     ),
     tf_efficientdet_lite4=dict(
         name='tf_efficientdet_lite4',
         backbone_name='tf_efficientnet_lite4',
-        image_size=(1024, 1024),
+        image_size=(640, 640),
         fpn_channels=224,
         fpn_cell_repeats=7,
         box_class_repeats=4,
-        act_type='relu',
         backbone_args=dict(drop_path_rate=0.2),
-        url='',
+        **tf_efficientdet_lite_common,
+        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/tf_efficientdet_lite4-391ddabc.pth',
     ),
 )
 

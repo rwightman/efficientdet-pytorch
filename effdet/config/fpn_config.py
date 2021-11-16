@@ -21,7 +21,7 @@ def bifpn_config(min_level, max_level, weight_method=None):
     for i in range(max_level - 1, min_level - 1, -1):
         # top-down path.
         p.nodes.append({
-            'reduction': 1 << i,
+            'feat_level': i,
             'inputs_offsets': [level_last_id(i), level_last_id(i + 1)],
             'weight_method': weight_method,
         })
@@ -30,7 +30,7 @@ def bifpn_config(min_level, max_level, weight_method=None):
     for i in range(min_level + 1, max_level + 1):
         # bottom-up path.
         p.nodes.append({
-            'reduction': 1 << i,
+            'feat_level': i,
             'inputs_offsets': level_all_ids(i) + [level_last_id(i - 1)],
             'weight_method': weight_method,
         })
@@ -59,7 +59,7 @@ def panfpn_config(min_level, max_level, weight_method=None):
         # top-down path.
         offsets = [level_last_id(i), level_last_id(i + 1)] if i != max_level else [level_last_id(i)]
         p.nodes.append({
-            'reduction': 1 << i,
+            'feat_level': i,
             'inputs_offsets': offsets,
             'weight_method': weight_method,
         })
@@ -69,7 +69,7 @@ def panfpn_config(min_level, max_level, weight_method=None):
         # bottom-up path.
         offsets = [level_last_id(i), level_last_id(i - 1)] if i != min_level else [level_last_id(i)]
         p.nodes.append({
-            'reduction': 1 << i,
+            'feat_level': i,
             'inputs_offsets': offsets,
             'weight_method': weight_method,
         })
@@ -102,7 +102,7 @@ def qufpn_config(min_level, max_level, weight_method=None):
     for i in range(max_level - 1, min_level - 1, -1):
         # top-down path 1.
         p.nodes.append({
-            'reduction': 1 << i,
+            'feat_level': i,
             'inputs_offsets': [level_last_id(i), level_last_id(i + 1)],
             'weight_method': weight_method
         })
@@ -112,7 +112,7 @@ def qufpn_config(min_level, max_level, weight_method=None):
     for i in range(min_level + 1, max_level):
         # bottom-up path 2.
         p.nodes.append({
-            'reduction': 1 << i,
+            'feat_level': i,
             'inputs_offsets': level_all_ids(i) + [level_last_id(i - 1)],
             'weight_method': weight_method
         })
@@ -120,7 +120,7 @@ def qufpn_config(min_level, max_level, weight_method=None):
 
     i = max_level
     p.nodes.append({
-        'reduction': 1 << i,
+        'feat_level': i,
         'inputs_offsets': [level_first_id(i)] + [level_last_id(i - 1)],
         'weight_method': weight_method
     })
@@ -130,7 +130,7 @@ def qufpn_config(min_level, max_level, weight_method=None):
     for i in range(min_level + 1, max_level + 1, 1):
         # bottom-up path 3.
         p.nodes.append({
-            'reduction': 1 << i,
+            'feat_level': i,
             'inputs_offsets': [
                 level_first_id(i), level_last_id(i - 1) if i != min_level + 1 else level_first_id(i - 1)],
             'weight_method': weight_method
@@ -141,14 +141,14 @@ def qufpn_config(min_level, max_level, weight_method=None):
     for i in range(max_level - 1, min_level, -1):
         # top-down path 4.
         p.nodes.append({
-            'reduction': 1 << i,
+            'feat_level': i,
             'inputs_offsets': [node_ids[i][0]] + [node_ids[i][-1]] + [level_last_id(i + 1)],
             'weight_method': weight_method
         })
         node_ids[i].append(next(id_cnt))
     i = min_level
     p.nodes.append({
-        'reduction': 1 << i,
+        'feat_level': i,
         'inputs_offsets': [node_ids[i][0]] + [level_last_id(i + 1)],
         'weight_method': weight_method
     })
@@ -160,7 +160,7 @@ def qufpn_config(min_level, max_level, weight_method=None):
     for i in range(min_level, max_level + 1):
         # quad-add path.
         p.nodes.append({
-            'reduction': 1 << i,
+            'feat_level': i,
             'inputs_offsets': [node_ids[i][2], node_ids[i][4]],
             'weight_method': quad_method
         })

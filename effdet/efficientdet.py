@@ -5,23 +5,25 @@ Paper: https://arxiv.org/abs/1911.09070
 
 Hacked together by Ross Wightman
 """
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import logging
 import math
 from collections import OrderedDict
-from typing import List, Callable, Optional, Union, Tuple
 from functools import partial
+from typing import List, Callable, Optional, Union, Tuple
 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 from timm import create_model
-from timm.models.layers import create_conv2d, create_pool2d, Swish, get_act_layer
+from timm.models.layers import create_conv2d, create_pool2d, get_act_layer
+
+from .anchors import get_feat_sizes
 from .config import get_fpn_config, set_config_writeable, set_config_readonly
 
 _DEBUG = False
-
-_ACT_LAYER = Swish
+_USE_SCALE = False
+_ACT_LAYER = get_act_layer('silu')
 
 
 class SequentialList(nn.Sequential):
@@ -136,81 +138,65 @@ class Interpolate2d(nn.Module):
 class ResampleFeatureMap(nn.Sequential):
 
     def __init__(
-            self, in_channels, out_channels, reduction_ratio=1., pad_type='', downsample=None, upsample=None,
-            norm_layer=nn.BatchNorm2d, apply_bn=False, conv_after_downsample=False, redundant_bias=False):
+            self, in_channels, out_channels, input_size, output_size, pad_type='',
+            downsample=None, upsample=None, norm_layer=nn.BatchNorm2d, apply_bn=False, redundant_bias=False):
         super(ResampleFeatureMap, self).__init__()
         downsample = downsample or 'max'
         upsample = upsample or 'nearest'
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.reduction_ratio = reduction_ratio
-        self.conv_after_downsample = conv_after_downsample
+        self.input_size = input_size
+        self.output_size = output_size
 
-        conv = None
         if in_channels != out_channels:
-            conv = ConvBnAct2d(
+            self.add_module('conv', ConvBnAct2d(
                 in_channels, out_channels, kernel_size=1, padding=pad_type,
                 norm_layer=norm_layer if apply_bn else None,
-                bias=not apply_bn or redundant_bias, act_layer=None)
+                bias=not apply_bn or redundant_bias, act_layer=None))
 
-        if reduction_ratio > 1:
-            if conv is not None and not self.conv_after_downsample:
-                self.add_module('conv', conv)
+        if input_size[0] > output_size[0] and input_size[1] > output_size[1]:
             if downsample in ('max', 'avg'):
-                stride_size = int(reduction_ratio)
-                downsample = create_pool2d(
-                     downsample, kernel_size=stride_size + 1, stride=stride_size, padding=pad_type)
+                stride_size_h = int((input_size[0] - 1) // output_size[0] + 1)
+                stride_size_w = int((input_size[1] - 1) // output_size[1] + 1)
+                if stride_size_h == stride_size_w:
+                    kernel_size = stride_size_h + 1
+                    stride = stride_size_h
+                else:
+                    # FIXME need to support tuple kernel / stride input to padding fns
+                    kernel_size = (stride_size_h + 1, stride_size_w + 1)
+                    stride = (stride_size_h, stride_size_w)
+                down_inst = create_pool2d(downsample, kernel_size=kernel_size, stride=stride, padding=pad_type)
             else:
-                downsample = Interpolate2d(scale_factor=1./reduction_ratio, mode=downsample)
-            self.add_module('downsample', downsample)
-            if conv is not None and self.conv_after_downsample:
-                self.add_module('conv', conv)
+                if _USE_SCALE:  # FIXME not sure if scale vs size is better, leaving both in to test for now
+                    scale = (input_size[0] / output_size[0], input_size[1] / output_size[1])
+                    down_inst = Interpolate2d(scale_factor=scale, mode=downsample)
+                else:
+                    down_inst = Interpolate2d(size=output_size, mode=downsample)
+            self.add_module('downsample', down_inst)
         else:
-            if conv is not None:
-                self.add_module('conv', conv)
-            if reduction_ratio < 1:
-                scale = int(1 // reduction_ratio)
-                self.add_module('upsample', Interpolate2d(scale_factor=scale, mode=upsample))
-
-    # def forward(self, x):
-    #     #  here for debugging only
-    #     assert x.shape[1] == self.in_channels
-    #     if self.reduction_ratio > 1:
-    #         if hasattr(self, 'conv') and not self.conv_after_downsample:
-    #             x = self.conv(x)
-    #         x = self.downsample(x)
-    #         if hasattr(self, 'conv') and self.conv_after_downsample:
-    #             x = self.conv(x)
-    #     else:
-    #         if hasattr(self, 'conv'):
-    #             x = self.conv(x)
-    #         if self.reduction_ratio < 1:
-    #             x = self.upsample(x)
-    #     return x
+            if input_size[0] < output_size[0] or input_size[1] < output_size[1]:
+                if _USE_SCALE:
+                    scale = (output_size[0] / input_size[0], output_size[1] / input_size[1])
+                    self.add_module('upsample', Interpolate2d(scale_factor=scale, mode=upsample))
+                else:
+                    self.add_module('upsample', Interpolate2d(size=output_size, mode=upsample))
 
 
 class FpnCombine(nn.Module):
-    def __init__(self, feature_info, fpn_config, fpn_channels, inputs_offsets, target_reduction, pad_type='',
+    def __init__(self, feature_info, fpn_channels, inputs_offsets, output_size, pad_type='',
                  downsample=None, upsample=None, norm_layer=nn.BatchNorm2d, apply_resample_bn=False,
-                 conv_after_downsample=False, redundant_bias=False, weight_method='attn'):
+                 redundant_bias=False, weight_method='attn'):
         super(FpnCombine, self).__init__()
         self.inputs_offsets = inputs_offsets
         self.weight_method = weight_method
 
         self.resample = nn.ModuleDict()
         for idx, offset in enumerate(inputs_offsets):
-            in_channels = fpn_channels
-            if offset < len(feature_info):
-                in_channels = feature_info[offset]['num_chs']
-                input_reduction = feature_info[offset]['reduction']
-            else:
-                node_idx = offset - len(feature_info)
-                input_reduction = fpn_config.nodes[node_idx]['reduction']
-            reduction_ratio = target_reduction / input_reduction
             self.resample[str(offset)] = ResampleFeatureMap(
-                in_channels, fpn_channels, reduction_ratio=reduction_ratio, pad_type=pad_type,
+                feature_info[offset]['num_chs'], fpn_channels,
+                input_size=feature_info[offset]['size'], output_size=output_size, pad_type=pad_type,
                 downsample=downsample, upsample=upsample, norm_layer=norm_layer, apply_bn=apply_resample_bn,
-                conv_after_downsample=conv_after_downsample, redundant_bias=redundant_bias)
+                redundant_bias=redundant_bias)
 
         if weight_method == 'attn' or weight_method == 'fastattn':
             self.edge_weights = nn.Parameter(torch.ones(len(inputs_offsets)), requires_grad=True)  # WSM
@@ -255,30 +241,29 @@ class Fnode(nn.Module):
 
 
 class BiFpnLayer(nn.Module):
-    def __init__(self, feature_info, fpn_config, fpn_channels, num_levels=5, pad_type='',
+    def __init__(self, feature_info, feat_sizes, fpn_config, fpn_channels, num_levels=5, pad_type='',
                  downsample=None, upsample=None, norm_layer=nn.BatchNorm2d, act_layer=_ACT_LAYER,
-                 apply_resample_bn=False, conv_after_downsample=True, conv_bn_relu_pattern=False,
-                 separable_conv=True, redundant_bias=False):
+                 apply_resample_bn=False, pre_act=True, separable_conv=True, redundant_bias=False):
         super(BiFpnLayer, self).__init__()
         self.num_levels = num_levels
-        self.conv_bn_relu_pattern = False
+        # fill feature info for all FPN nodes (chs and feat size) before creating FPN nodes
+        fpn_feature_info = feature_info + [
+            dict(num_chs=fpn_channels, size=feat_sizes[fc['feat_level']]) for fc in fpn_config.nodes]
 
-        self.feature_info = []
         self.fnode = nn.ModuleList()
         for i, fnode_cfg in enumerate(fpn_config.nodes):
             logging.debug('fnode {} : {}'.format(i, fnode_cfg))
-            reduction = fnode_cfg['reduction']
             combine = FpnCombine(
-                feature_info, fpn_config, fpn_channels, tuple(fnode_cfg['inputs_offsets']),
-                target_reduction=reduction, pad_type=pad_type, downsample=downsample, upsample=upsample,
-                norm_layer=norm_layer, apply_resample_bn=apply_resample_bn, conv_after_downsample=conv_after_downsample,
+                fpn_feature_info, fpn_channels, tuple(fnode_cfg['inputs_offsets']),
+                output_size=feat_sizes[fnode_cfg['feat_level']], pad_type=pad_type,
+                downsample=downsample, upsample=upsample, norm_layer=norm_layer, apply_resample_bn=apply_resample_bn,
                 redundant_bias=redundant_bias, weight_method=fnode_cfg['weight_method'])
 
             after_combine = nn.Sequential()
             conv_kwargs = dict(
                 in_channels=fpn_channels, out_channels=fpn_channels, kernel_size=3, padding=pad_type,
                 bias=False, norm_layer=norm_layer, act_layer=act_layer)
-            if not conv_bn_relu_pattern:
+            if pre_act:
                 conv_kwargs['bias'] = redundant_bias
                 conv_kwargs['act_layer'] = None
                 after_combine.add_module('act', act_layer(inplace=True))
@@ -286,9 +271,8 @@ class BiFpnLayer(nn.Module):
                 'conv', SeparableConv2d(**conv_kwargs) if separable_conv else ConvBnAct2d(**conv_kwargs))
 
             self.fnode.append(Fnode(combine=combine, after_combine=after_combine))
-            self.feature_info.append(dict(num_chs=fpn_channels, reduction=reduction))
 
-        self.feature_info = self.feature_info[-num_levels::]
+        self.feature_info = fpn_feature_info[-num_levels::]
 
     def forward(self, x: List[torch.Tensor]):
         for fn in self.fnode:
@@ -308,35 +292,38 @@ class BiFpn(nn.Module):
         fpn_config = config.fpn_config or get_fpn_config(
             config.fpn_name, min_level=config.min_level, max_level=config.max_level)
 
+        feat_sizes = get_feat_sizes(config.image_size, max_level=config.max_level)
+        prev_feat_size = feat_sizes[config.min_level]
         self.resample = nn.ModuleDict()
         for level in range(config.num_levels):
+            feat_size = feat_sizes[level + config.min_level]
             if level < len(feature_info):
                 in_chs = feature_info[level]['num_chs']
-                reduction = feature_info[level]['reduction']
+                feature_info[level]['size'] = feat_size
             else:
                 # Adds a coarser level by downsampling the last feature map
-                reduction_ratio = 2
                 self.resample[str(level)] = ResampleFeatureMap(
                     in_channels=in_chs,
                     out_channels=config.fpn_channels,
+                    input_size=prev_feat_size,
+                    output_size=feat_size,
                     pad_type=config.pad_type,
                     downsample=config.downsample_type,
                     upsample=config.upsample_type,
                     norm_layer=norm_layer,
-                    reduction_ratio=reduction_ratio,
                     apply_bn=config.apply_resample_bn,
-                    conv_after_downsample=config.conv_after_downsample,
                     redundant_bias=config.redundant_bias,
                 )
                 in_chs = config.fpn_channels
-                reduction = int(reduction * reduction_ratio)
-                feature_info.append(dict(num_chs=in_chs, reduction=reduction))
+                feature_info.append(dict(num_chs=in_chs, size=feat_size))
+            prev_feat_size = feat_size
 
         self.cell = SequentialList()
         for rep in range(config.fpn_cell_repeats):
             logging.debug('building cell {}'.format(rep))
             fpn_layer = BiFpnLayer(
                 feature_info=feature_info,
+                feat_sizes=feat_sizes,
                 fpn_config=fpn_config,
                 fpn_channels=config.fpn_channels,
                 num_levels=config.num_levels,
@@ -347,8 +334,7 @@ class BiFpn(nn.Module):
                 act_layer=act_layer,
                 separable_conv=config.separable_conv,
                 apply_resample_bn=config.apply_resample_bn,
-                conv_after_downsample=config.conv_after_downsample,
-                conv_bn_relu_pattern=config.conv_bn_relu_pattern,
+                pre_act=not config.conv_bn_relu_pattern,
                 redundant_bias=config.redundant_bias,
             )
             self.cell.add_module(str(rep), fpn_layer)

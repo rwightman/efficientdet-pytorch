@@ -29,9 +29,7 @@ from typing import Optional, Tuple, Sequence
 import numpy as np
 import torch
 import torch.nn as nn
-#import torchvision.ops.boxes as tvb
 from torchvision.ops.boxes import batched_nms, remove_small_boxes
-from typing import List
 
 from effdet.object_detection import ArgMaxMatcher, FasterRcnnBoxCoder, BoxList, IouSimilarity, TargetAssigner
 from .soft_nms import batched_soft_nms
@@ -217,9 +215,6 @@ class Anchors(nn.Module):
             self.anchor_scales = [anchor_scale] * (max_level - min_level + 1)
 
         assert isinstance(image_size, Sequence) and len(image_size) == 2
-        # FIXME this restriction can likely be relaxed with some additional changes
-        assert image_size[0] % 2 ** max_level == 0, 'Image size must be divisible by 2 ** max_level (128)'
-        assert image_size[1] % 2 ** max_level == 0, 'Image size must be divisible by 2 ** max_level (128)'
         self.image_size = tuple(image_size)
         self.feat_sizes = get_feat_sizes(image_size, max_level)
         self.config = self._generate_configs()
@@ -241,14 +236,14 @@ class Anchors(nn.Module):
             for scale_octave in range(self.num_scales):
                 for aspect in self.aspect_ratios:
                     anchor_configs[level].append(
-                        ((feat_sizes[0][0] // feat_sizes[level][0],
-                          feat_sizes[0][1] // feat_sizes[level][1]),
+                        ((feat_sizes[0][0] / float(feat_sizes[level][0]),
+                          feat_sizes[0][1] / float(feat_sizes[level][1])),
                          scale_octave / float(self.num_scales), aspect,
                          self.anchor_scales[level - self.min_level]))
         return anchor_configs
 
     def _generate_boxes(self):
-        """Generates multiscale anchor boxes."""
+        """Generates multi-scale anchor boxes."""
         boxes_all = []
         for _, configs in self.config.items():
             boxes_level = []
@@ -257,8 +252,7 @@ class Anchors(nn.Module):
                 base_anchor_size_x = anchor_scale * stride[1] * 2 ** octave_scale
                 base_anchor_size_y = anchor_scale * stride[0] * 2 ** octave_scale
                 if isinstance(aspect, Sequence):
-                    aspect_x = aspect[0]
-                    aspect_y = aspect[1]
+                    aspect_x, aspect_y = aspect
                 else:
                     aspect_x = np.sqrt(aspect)
                     aspect_y = 1.0 / aspect_x

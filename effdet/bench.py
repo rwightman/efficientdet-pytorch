@@ -3,10 +3,18 @@
 Hacked together by Ross Wightman
 """
 from typing import Optional, Dict, List
+
 import torch
 import torch.nn as nn
+
 from .anchors import Anchors, AnchorLabeler, generate_detections
 from .loss import DetectionLoss
+
+try:
+    torch.div(torch.ones(1), torch.ones(1), rounding_mode='floor')
+    has_rounding_mode = True
+except TypeError:
+    has_rounding_mode = False
 
 
 def _post_process(
@@ -42,7 +50,10 @@ def _post_process(
         for level in range(num_levels)], 1)
 
     _, cls_topk_indices_all = torch.topk(cls_outputs_all.reshape(batch_size, -1), dim=1, k=max_detection_points)
-    indices_all = cls_topk_indices_all // num_classes
+    if has_rounding_mode:
+        indices_all = torch.div(cls_topk_indices_all, num_classes, rounding_mode='trunc')
+    else:
+        indices_all = cls_topk_indices_all // num_classes
     classes_all = cls_topk_indices_all % num_classes
 
     box_outputs_all_after_topk = torch.gather(
