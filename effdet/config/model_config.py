@@ -149,6 +149,24 @@ efficientdet_model_param_dict = dict(
         url='',
     ),
 
+    efficientdetv2_dt=dict(
+        name='efficientdetv2_dt',
+        backbone_name='efficientnetv2_rw_t',
+        image_size=(768, 768),
+        fpn_channels=128,
+        fpn_cell_repeats=5,
+        box_class_repeats=3,
+        aspect_ratios=[1.0, 2.0, 0.5],
+        pad_type='',
+        downsample_type='bilinear',
+        upsample_type='bilinear',
+        redundant_bias=False,
+        head_bn_level_first=True,
+        backbone_args=dict(drop_path_rate=0.2),
+        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/efficientdetv2_rw_dt-17f4a380.pth',
+    ),
+
+
     # My own experimental configs with alternate models, training TBD
     # Note: any 'timm' model in the EfficientDet family can be used as a backbone here.
     resdet50=dict(

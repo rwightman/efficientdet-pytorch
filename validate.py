@@ -97,10 +97,10 @@ def validate(args):
     setup_default_logging()
 
     if args.amp:
-        if has_apex:
-            args.apex_amp = True
-        elif has_native_amp:
+        if has_native_amp:
             args.native_amp = True
+        elif has_apex:
+            args.apex_amp = True
     assert not args.apex_amp or not args.native_amp, "Only one AMP mode should be set."
     args.pretrained = args.pretrained or not args.checkpoint  # might as well try to validate something
     args.prefetcher = not args.no_prefetcher

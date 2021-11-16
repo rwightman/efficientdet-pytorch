@@ -247,26 +247,26 @@ def main():
     use_amp = None
     if args.amp:
         # for backwards compat, `--amp` arg tries apex before native amp
-        if has_apex:
-            args.apex_amp = True
-        elif has_native_amp:
+        if has_native_amp:
             args.native_amp = True
+        elif has_apex:
+            args.apex_amp = True
         else:
             logging.warning("Neither APEX or native Torch AMP is available, using float32. "
                             "Install NVIDA apex or upgrade to PyTorch 1.6.")
 
-    if args.apex_amp:
-        if has_apex:
-            use_amp = 'apex'
-        else:
-            logging.warning("APEX AMP not available, using float32. Install NVIDA apex")
-    elif args.native_amp:
+    if args.native_amp:
         if has_native_amp:
             use_amp = 'native'
         else:
             logging.warning("Native AMP not available, using float32. Upgrade to PyTorch 1.6.")
+    elif args.apex_amp:
+        if has_apex:
+            use_amp = 'apex'
+        else:
+            logging.warning("APEX AMP not available, using float32. Install NVIDA apex")
 
-    torch.manual_seed(args.seed + args.rank)
+    random_seed(args.seed, args.rank)
 
     with set_layer_config(scriptable=args.torchscript):
         model = create_model(
@@ -293,7 +293,7 @@ def main():
         model = model.to(memory_format=torch.channels_last)
 
     if args.distributed and args.sync_bn:
-        if has_apex and use_amp != 'native':
+        if has_apex and use_amp == 'apex':
             model = convert_syncbn_model(model)
         else:
             model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
@@ -311,16 +311,16 @@ def main():
 
     amp_autocast = suppress  # do nothing
     loss_scaler = None
-    if use_amp == 'apex':
-        model, optimizer = amp.initialize(model, optimizer, opt_level='O1')
-        loss_scaler = ApexScaler()
-        if args.local_rank == 0:
-            logging.info('Using NVIDIA APEX AMP. Training in mixed precision.')
-    elif use_amp == 'native':
+    if use_amp == 'native':
         amp_autocast = torch.cuda.amp.autocast
         loss_scaler = NativeScaler()
         if args.local_rank == 0:
             logging.info('Using native Torch AMP. Training in mixed precision.')
+    elif use_amp == 'apex':
+        model, optimizer = amp.initialize(model, optimizer, opt_level='O1')
+        loss_scaler = ApexScaler()
+        if args.local_rank == 0:
+            logging.info('Using NVIDIA APEX AMP. Training in mixed precision.')
     else:
         if args.local_rank == 0:
             logging.info('AMP not enabled. Training in float32.')
@@ -342,7 +342,7 @@ def main():
             load_checkpoint(unwrap_bench(model_ema), args.resume, use_ema=True)
 
     if args.distributed:
-        if has_apex and use_amp != 'native':
+        if has_apex and use_amp == 'apex':
             if args.local_rank == 0:
                 logging.info("Using apex DistributedDataParallel.")
             model = ApexDDP(model, delay_allreduce=True)
