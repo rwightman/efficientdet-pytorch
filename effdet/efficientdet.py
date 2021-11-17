@@ -168,7 +168,7 @@ class ResampleFeatureMap(nn.Sequential):
                 down_inst = create_pool2d(downsample, kernel_size=kernel_size, stride=stride, padding=pad_type)
             else:
                 if _USE_SCALE:  # FIXME not sure if scale vs size is better, leaving both in to test for now
-                    scale = (input_size[0] / output_size[0], input_size[1] / output_size[1])
+                    scale = (output_size[0] / input_size[0], output_size[1] / input_size[1])
                     down_inst = Interpolate2d(scale_factor=scale, mode=downsample)
                 else:
                     down_inst = Interpolate2d(size=output_size, mode=downsample)
