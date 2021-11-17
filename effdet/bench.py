@@ -10,11 +10,11 @@ import torch.nn as nn
 from .anchors import Anchors, AnchorLabeler, generate_detections
 from .loss import DetectionLoss
 
-try:
-    torch.div(torch.ones(1), torch.ones(1), rounding_mode='floor')
-    has_rounding_mode = True
-except TypeError:
-    has_rounding_mode = False
+# try:
+#     torch.div(torch.ones(1), torch.ones(1), rounding_mode='floor')
+#     has_rounding_mode = True
+# except TypeError:
+#     has_rounding_mode = False
 
 
 def _post_process(
@@ -50,10 +50,9 @@ def _post_process(
         for level in range(num_levels)], 1)
 
     _, cls_topk_indices_all = torch.topk(cls_outputs_all.reshape(batch_size, -1), dim=1, k=max_detection_points)
-    if has_rounding_mode:
-        indices_all = torch.div(cls_topk_indices_all, num_classes, rounding_mode='trunc')
-    else:
-        indices_all = cls_topk_indices_all // num_classes
+    # FIXME change someday, will have to live with annoying warnings for a while as testing impl breaks torchscript
+    # indices_all = torch.div(cls_topk_indices_all, num_classes, rounding_mode='trunc')
+    indices_all = cls_topk_indices_all // num_classes
     classes_all = cls_topk_indices_all % num_classes
 
     box_outputs_all_after_topk = torch.gather(
