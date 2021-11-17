@@ -143,6 +143,7 @@ efficientdet_model_param_dict = dict(
         fpn_cell_repeats=7,
         box_class_repeats=4,
         backbone_args=dict(drop_path_rate=0.2),
+        url='',  # no pretrained weights yet
     ),
     efficientdet_d5=dict(
         name='efficientdet_d5',
@@ -152,7 +153,7 @@ efficientdet_model_param_dict = dict(
         fpn_cell_repeats=7,
         box_class_repeats=4,
         backbone_args=dict(drop_path_rate=0.2),
-        url='',
+        url='',  # no pretrained weights yet
     ),
 
     efficientdetv2_dt=dict(
@@ -170,6 +171,23 @@ efficientdet_model_param_dict = dict(
         head_bn_level_first=True,
         backbone_args=dict(drop_path_rate=0.2),
         url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/efficientdetv2_rw_dt-17f4a380.pth',
+    ),
+
+    efficientdetv2_ds=dict(
+        name='efficientdetv2_ds',
+        backbone_name='efficientnetv2_rw_s',
+        image_size=(1024, 1024),
+        fpn_channels=256,
+        fpn_cell_repeats=7,
+        box_class_repeats=4,
+        aspect_ratios=[1.0, 2.0, 0.5],
+        pad_type='',
+        downsample_type='bilinear',
+        upsample_type='bilinear',
+        redundant_bias=False,
+        head_bn_level_first=True,
+        backbone_args=dict(drop_path_rate=0.2),
+        url='',  # I need to find a machine to train this on
     ),
 
 
