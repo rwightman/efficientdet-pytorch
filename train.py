@@ -60,7 +60,7 @@ parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 parser.add_argument('root', metavar='DIR',
                     help='path to dataset')
 parser.add_argument('--dataset', default='coco', type=str, metavar='DATASET',
-                    help='Name of model to train (default: "coco"')
+                    help='Name of dataset to train (default: "coco"')
 parser.add_argument('--model', default='tf_efficientdet_d1', type=str, metavar='MODEL',
                     help='Name of model to train (default: "tf_efficientdet_d1"')
 add_bool_arg(parser, 'redundant-bias', default=None, help='override model config for redundant bias')
