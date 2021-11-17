@@ -133,10 +133,10 @@ _NOTE: In training some experimental models, I've noticed some potential issues 
 
 ## Environment Setup
 
-Tested in a Python 3.7 or 3.8 conda environment in Linux with:
-* PyTorch 1.6, 1.7, 1.7.1
-* PyTorch Image Models (timm) >= 0.3.2, `pip install timm` or local install from (https://github.com/rwightman/pytorch-image-models)
-* Apex AMP master (as of 2020-08)
+Tested in a Python 3.7 - 3.9 conda environment in Linux with:
+* PyTorch 1.6 - 1.10
+* PyTorch Image Models (timm) >= 0.4.12, `pip install timm` or local install from (https://github.com/rwightman/pytorch-image-models)
+* Apex AMP master (as of 2020-08). I recommend using native PyTorch AMP and DDP now.
 
 *NOTE* - There is a conflict/bug with Numpy 1.18+ and pycocotools 2.0, force install numpy <= 1.17.5 or ensure you install pycocotools >= 2.0.2
 
