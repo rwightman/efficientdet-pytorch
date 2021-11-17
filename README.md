@@ -109,7 +109,7 @@ The table below contains models with pretrained weights. There are quite a numbe
 | efficientdet_q2 | 43.1 | TBD | N/A | N/A | 8.81 | 768 |
 | cspresdet50 | 43.2 | TBD | N/A | N/A | 24.3 | 768 |
 | tf_efficientdet_d2 | 43.4 | TBD | 42.5 | 43 | 8.10 | 768 |
-| tf_efficientdet_lite3x | 43.6 | TBD | 42.64 | N/A | 9.28 | 640 |
+| tf_efficientdet_lite3x | 43.6 | TBD | 42.6 | N/A | 9.28 | 640 |
 | tf_efficientdet_lite4 | 44.2 | TBD | 43.2 | N/A | 15.1 | 640 |
 | tf_efficientdet_d2_ap | 44.2 | TBD | 44.3 | 44.3 | 8.10 | 768 |
 | cspdarkdet53m | 45.2 | TBD | N/A | N/A | 35.6 | 768 |
