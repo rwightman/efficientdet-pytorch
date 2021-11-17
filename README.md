@@ -16,6 +16,12 @@ Aside from the default model configs, there is a lot of flexibility to facilitat
 
 ## Updates
 
+### 2021-11-16
+* Add EfficientNetV2 backbone experiment `efficientnetv2_dt` based on `timm`'s `efficientnetv2_rw_t` (tiny) model. 45.8 mAP @ 768x768.
+* Updated TF EfficientDet-Lite model defs incl weights ported from official impl (https://github.com/google/automl)
+* For Lite models, updated feature resizing code in FPN to be based on feat size instead of reduction ratios, needed to support image size that aren't divisible by 128.
+* Minor tweaks, bug fixes
+
 ### 2021-07-28
 * Add training example to README provided by Chris Hughes for training w/ custom dataset & Lightning training code
   * [Medium blog post](https://medium.com/data-science-at-microsoft/training-efficientdet-on-custom-data-with-pytorch-lightning-using-an-efficientnetv2-backbone-1cdf3bd7921f)
@@ -78,76 +84,45 @@ A few things on priority list I haven't tackled yet:
 Training sanity checks were done on VOC and OI
   * 80.0 @ 50 mAP finetune on voc0712 with no attempt to tune params (roughly as per command below)
   * 18.0 mAP @ 50 for OI Challenge2019 after couple days of training (only 6 epochs, eek!). It's much bigger, and takes a LOONG time, many classes are quite challenging.
-  
-### 2020-09-03
-* All models updated to latest checkpoints from TF original.
-* Add experimental soft-nms code, must be manually enabled right now. It is REALLY slow, .1-.2 mAP increase.
-
-### 2020-07-27
-* Add updated TF ported weights for D3 model (better training) and model def and weights for new D7X model (54.3 val mAP)
-* Fix Windows bug so it at least trains in non-distributed mode
-
-### 2020-06-15
-Add updated D7 weights from Tensorflow impl, 53.1 validation mAP here (53.4 in TF)
-
-### 2020-06-14
-New model results, I've trained a D1 model with some WIP augmentation enhancements (not commited), just squeaking by official weights.
-
-EfficientDet-D1:
-```
- Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.393798
- Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.586831
- Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.420305
- Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.191880
- Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.455586
- Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.571316
-```
-
-Also, [Soyeb Nagori](https://github.com/soyebn) trained an EfficientDet-Lite0 config using this code and contributed the weights.
-```
- Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.319861
- Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.500062
- Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.336777
- Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.111257
- Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.378062
- Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.501938
-```
-
-Unlike the other tf_ prefixed models this is not ported from (as of yet unreleased) TF official model, but it used
-TF ported weights from `timm` for the pretrained imagenet model as the backbone init, thus it uses SAME padding. 
 
 
 ## Models
 
 The table below contains models with pretrained weights. There are quite a number of other models that I have defined in [model configurations](effdet/config/model_config.py) that use various `timm` backbones.
 
-| Variant | mAP (val2017) | mAP (test-dev2017) | mAP (TF official val2017) | mAP (TF official test-dev2017) | Params (M) |
-| --- | :---: | :---: | :---: | :---: | :---: |
-| tf_efficientdet_lite0 | 32.0 | TBD | N/A | N/A | 3.24 |
-| efficientdet_d0 | 33.6 | TBD | 33.5 | 33.8 | 3.88 |
-| tf_efficientdet_d0 | 34.2 | TBD | 34.3 | 34.6 | 3.88 |
-| tf_efficientdet_d0_ap | 34.8 | TBD | 35.2 | 35.3 | 3.88 |
-| efficientdet_q0 | 35.7 | TBD | N/A | N/A | 4.13 |
-| efficientdet_d1 | 39.4 | 39.5 | 39.1 | 39.6 | 6.62 |
-| tf_efficientdet_d1 | 40.1 | TBD | 40.2 | 40.5 | 6.63 |
-| tf_efficientdet_d1_ap | 40.8 | TBD | 40.9 | 40.8 | 6.63 |
-| efficientdet_q1 | 40.9 | TBD | N/A | N/A | 6.98 |
-| cspresdext50pan | 41.2 | TBD | N/A | N/A | 22.2 |
-| resdet50 | 41.6 | TBD | N/A | N/A | 27.6 |
-| efficientdet_q2 | 43.1 | TBD | N/A | N/A | 8.81 |
-| cspresdet50 | 43.2 | TBD | N/A | N/A | 24.3 |
-| tf_efficientdet_d2 | 43.4 | TBD | 42.5 | 43 | 8.10 |
-| tf_efficientdet_d2_ap | 44.2 | TBD | 44.3 | 44.3 | 8.10 |
-| cspdarkdet53m | 45.2 | TBD | N/A | N/A | 35.6 |
-| tf_efficientdet_d3 | 47.1 | TBD | 47.2 | 47.5 | 12.0 |
-| tf_efficientdet_d3_ap | 47.7 | TBD | 48.0 | 47.7 | 12.0 |
-| tf_efficientdet_d4 | 49.2 | TBD | 49.3 | 49.7 | 20.7 |
-| tf_efficientdet_d4_ap | 50.2 | TBD | 50.4 | 50.4 | 20.7 |
-| tf_efficientdet_d5 | 51.2 | TBD | 51.2 | 51.5 | 33.7 |
-| tf_efficientdet_d6 | 52.0 | TBD | 52.1 | 52.6 | 51.9 |
-| tf_efficientdet_d5_ap | 52.1 | TBD | 52.2 | 52.5 | 33.7 |
-| tf_efficientdet_d7 | 53.1 | 53.4 | 53.4 | 53.7 | 51.9 |
-| tf_efficientdet_d7x | 54.3 | TBD | 54.4 | 55.1 | 77.1 |
+| Variant | mAP (val2017) | mAP (test-dev2017) | mAP (TF official val2017) | mAP (TF official test-dev2017) | Params (M) | Img Size |
+| --- | :---: | :---: | :---: | :---: | :---: | :---: |
+| tf_efficientdet_lite0 | 27.1 | TBD | 26.4 | N/A | 3.24 | 320 |
+| tf_efficientdet_lite1 | 32.2 | TBD | 31.5 | N/A | 4.25 | 384 |
+| efficientdet_d0 | 33.6 | TBD | N/A | N/A | 3.88 | 512 |
+| tf_efficientdet_d0 | 34.2 | TBD | 34.3 | 34.6 | 3.88 | 512 |
+| tf_efficientdet_d0_ap | 34.8 | TBD | 35.2 | 35.3 | 3.88 | 512 |
+| efficientdet_q0 | 35.7 | TBD | N/A | N/A | 4.13 | 512 |
+| tf_efficientdet_lite2 | 35.9 | TBD | 35.1 | N/A | 5.25 | 448 |
+| efficientdet_d1 | 39.4 | 39.5 | N/A | N/A | 6.62 | 640 |
+| tf_efficientdet_lite3 | 39.6 | TBD | 38.8 | N/A | 8.35 | 512  |
+| tf_efficientdet_d1 | 40.1 | TBD | 40.2 | 40.5 | 6.63 | 640 |
+| tf_efficientdet_d1_ap | 40.8 | TBD | 40.9 | 40.8 | 6.63 | 640 |
+| efficientdet_q1 | 40.9 | TBD | N/A | N/A | 6.98 | 640 |
+| cspresdext50pan | 41.2 | TBD | N/A | N/A | 22.2 | 640 |
+| resdet50 | 41.6 | TBD | N/A | N/A | 27.6 | 640 |
+| efficientdet_q2 | 43.1 | TBD | N/A | N/A | 8.81 | 768 |
+| cspresdet50 | 43.2 | TBD | N/A | N/A | 24.3 | 768 |
+| tf_efficientdet_d2 | 43.4 | TBD | 42.5 | 43 | 8.10 | 768 |
+| tf_efficientdet_lite3x | 43.6 | TBD | 42.64 | N/A | 9.28 | 640 |
+| tf_efficientdet_lite4 | 44.2 | TBD | 43.2 | N/A | 15.1 | 640 |
+| tf_efficientdet_d2_ap | 44.2 | TBD | 44.3 | 44.3 | 8.10 | 768 |
+| cspdarkdet53m | 45.2 | TBD | N/A | N/A | 35.6 | 768 |
+| efficientdetv2_dt | 45.8 | TBD | N/A | N/A | 13.4 | 768 |
+| tf_efficientdet_d3 | 47.1 | TBD | 47.2 | 47.5 | 12.0 | 896 |
+| tf_efficientdet_d3_ap | 47.7 | TBD | 48.0 | 47.7 | 12.0 | 896 |
+| tf_efficientdet_d4 | 49.2 | TBD | 49.3 | 49.7 | 20.7 | 1024 |
+| tf_efficientdet_d4_ap | 50.2 | TBD | 50.4 | 50.4 | 20.7 | 1024 |
+| tf_efficientdet_d5 | 51.2 | TBD | 51.2 | 51.5 | 33.7 | 1280 |
+| tf_efficientdet_d6 | 52.0 | TBD | 52.1 | 52.6 | 51.9 | 1280 |
+| tf_efficientdet_d5_ap | 52.1 | TBD | 52.2 | 52.5 | 33.7 | 1280 |
+| tf_efficientdet_d7 | 53.1 | 53.4 | 53.4 | 53.7 | 51.9 | 1536 |
+| tf_efficientdet_d7x | 54.3 | TBD | 54.4 | 55.1 | 77.1 | 1536 |
 
 
 See [model configurations](effdet/config/model_config.py) for model checkpoint urls and differences.
