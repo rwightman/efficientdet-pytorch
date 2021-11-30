@@ -91,6 +91,8 @@ parser.add_argument('-b', '--batch-size', type=int, default=32, metavar='N',
                     help='input batch size for training (default: 32)')
 parser.add_argument('--clip-grad', type=float, default=10.0, metavar='NORM',
                     help='Clip gradient norm (default: 10.0)')
+parser.add_argument('--clip-mode', type=str, default='norm',
+                    help='Gradient clipping mode. One of ("norm", "value", "agc")')
 
 # Optimizer parameters
 parser.add_argument('--opt', default='momentum', type=str, metavar='OPTIMIZER',
@@ -216,6 +218,14 @@ def _parse_args():
     # Cache the args as a text string to save them in the output dir later
     args_text = yaml.safe_dump(args.__dict__, default_flow_style=False)
     return args, args_text
+
+
+def get_clip_parameters(model, exclude_head=False):
+    if exclude_head:
+        # FIXME this a bit of a quick and dirty hack to skip classifier head params
+        return [p for n, p in model.named_parameters() if 'predict' not in n]
+    else:
+        return model.parameters()
 
 
 def main():
@@ -526,7 +536,7 @@ def train_epoch(
     losses_m = AverageMeter()
 
     model.train()
-
+    clip_params = get_clip_parameters(model, exclude_head='agc' in args.clip_mode)
     end = time.time()
     last_idx = len(loader) - 1
     num_updates = epoch * len(loader)
@@ -546,11 +556,13 @@ def train_epoch(
 
         optimizer.zero_grad()
         if loss_scaler is not None:
-            loss_scaler(loss, optimizer, clip_grad=args.clip_grad, parameters=model.parameters())
+            loss_scaler(
+                loss, optimizer,
+                clip_grad=args.clip_grad, clip_mode=args.clip_mode, parameters=clip_params)
         else:
             loss.backward()
-            if args.clip_grad:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip_grad)
+            if args.clip_grad is not None:
+                dispatch_clip_grad(clip_params, value=args.clip_grad, mode=args.clip_mode)
             optimizer.step()
 
         torch.cuda.synchronize()

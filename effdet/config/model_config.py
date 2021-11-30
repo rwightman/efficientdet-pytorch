@@ -170,7 +170,7 @@ efficientdet_model_param_dict = dict(
         redundant_bias=False,
         head_bn_level_first=True,
         backbone_args=dict(drop_path_rate=0.2),
-        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/efficientdetv2_rw_dt-17f4a380.pth',
+        url='https://github.com/rwightman/efficientdet-pytorch/releases/download/v0.1/efficientdetv2_rw_dt_agc-ad8b8c96.pth',
     ),
 
     efficientdetv2_ds=dict(

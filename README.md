@@ -16,6 +16,11 @@ Aside from the default model configs, there is a lot of flexibility to facilitat
 
 ## Updates
 
+### 2021-11-30
+* Update `efficientnetv2_dt` weights to a new set, 46.1 mAP @ 768x768, 47.0 mAP @ 896x896 using AGC clipping.
+* Add AGC (Adaptive Gradient Clipping support via `timm`). Idea from (`High-Performance Large-Scale Image Recognition Without Normalization` - https://arxiv.org/abs/2102.06171)
+* `timm` minimum version bumped up to 0.4.12
+
 ### 2021-11-16
 * Add EfficientNetV2 backbone experiment `efficientnetv2_dt` based on `timm`'s `efficientnetv2_rw_t` (tiny) model. 45.8 mAP @ 768x768.
 * Updated TF EfficientDet-Lite model defs incl weights ported from official impl (https://github.com/google/automl)
