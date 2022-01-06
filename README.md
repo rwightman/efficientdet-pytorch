@@ -16,6 +16,9 @@ Aside from the default model configs, there is a lot of flexibility to facilitat
 
 ## Updates
 
+### 2022-01-06
+* New `efficientnetv2_ds` weights 50.1 mAP @ 1024x0124, using AGC clipping. Memory use comparable to D3, speed faster than D4. Smaller than optimal training batch size so can probably do better... 
+
 ### 2021-11-30
 * Update `efficientnetv2_dt` weights to a new set, 46.1 mAP @ 768x768, 47.0 mAP @ 896x896 using AGC clipping.
 * Add AGC (Adaptive Gradient Clipping support via `timm`). Idea from (`High-Performance Large-Scale Image Recognition Without Normalization` - https://arxiv.org/abs/2102.06171)
@@ -95,39 +98,40 @@ Training sanity checks were done on VOC and OI
 
 The table below contains models with pretrained weights. There are quite a number of other models that I have defined in [model configurations](effdet/config/model_config.py) that use various `timm` backbones.
 
-| Variant | mAP (val2017) | mAP (test-dev2017) | mAP (TF official val2017) | mAP (TF official test-dev2017) | Params (M) | Img Size |
-| --- | :---: | :---: | :---: | :---: | :---: | :---: |
-| tf_efficientdet_lite0 | 27.1 | TBD | 26.4 | N/A | 3.24 | 320 |
-| tf_efficientdet_lite1 | 32.2 | TBD | 31.5 | N/A | 4.25 | 384 |
-| efficientdet_d0 | 33.6 | TBD | N/A | N/A | 3.88 | 512 |
-| tf_efficientdet_d0 | 34.2 | TBD | 34.3 | 34.6 | 3.88 | 512 |
-| tf_efficientdet_d0_ap | 34.8 | TBD | 35.2 | 35.3 | 3.88 | 512 |
-| efficientdet_q0 | 35.7 | TBD | N/A | N/A | 4.13 | 512 |
-| tf_efficientdet_lite2 | 35.9 | TBD | 35.1 | N/A | 5.25 | 448 |
-| efficientdet_d1 | 39.4 | 39.5 | N/A | N/A | 6.62 | 640 |
-| tf_efficientdet_lite3 | 39.6 | TBD | 38.8 | N/A | 8.35 | 512  |
-| tf_efficientdet_d1 | 40.1 | TBD | 40.2 | 40.5 | 6.63 | 640 |
-| tf_efficientdet_d1_ap | 40.8 | TBD | 40.9 | 40.8 | 6.63 | 640 |
-| efficientdet_q1 | 40.9 | TBD | N/A | N/A | 6.98 | 640 |
-| cspresdext50pan | 41.2 | TBD | N/A | N/A | 22.2 | 640 |
-| resdet50 | 41.6 | TBD | N/A | N/A | 27.6 | 640 |
-| efficientdet_q2 | 43.1 | TBD | N/A | N/A | 8.81 | 768 |
-| cspresdet50 | 43.2 | TBD | N/A | N/A | 24.3 | 768 |
-| tf_efficientdet_d2 | 43.4 | TBD | 42.5 | 43 | 8.10 | 768 |
-| tf_efficientdet_lite3x | 43.6 | TBD | 42.6 | N/A | 9.28 | 640 |
-| tf_efficientdet_lite4 | 44.2 | TBD | 43.2 | N/A | 15.1 | 640 |
-| tf_efficientdet_d2_ap | 44.2 | TBD | 44.3 | 44.3 | 8.10 | 768 |
-| cspdarkdet53m | 45.2 | TBD | N/A | N/A | 35.6 | 768 |
-| efficientdetv2_dt | 45.8 | TBD | N/A | N/A | 13.4 | 768 |
-| tf_efficientdet_d3 | 47.1 | TBD | 47.2 | 47.5 | 12.0 | 896 |
-| tf_efficientdet_d3_ap | 47.7 | TBD | 48.0 | 47.7 | 12.0 | 896 |
-| tf_efficientdet_d4 | 49.2 | TBD | 49.3 | 49.7 | 20.7 | 1024 |
-| tf_efficientdet_d4_ap | 50.2 | TBD | 50.4 | 50.4 | 20.7 | 1024 |
-| tf_efficientdet_d5 | 51.2 | TBD | 51.2 | 51.5 | 33.7 | 1280 |
-| tf_efficientdet_d6 | 52.0 | TBD | 52.1 | 52.6 | 51.9 | 1280 |
-| tf_efficientdet_d5_ap | 52.1 | TBD | 52.2 | 52.5 | 33.7 | 1280 |
-| tf_efficientdet_d7 | 53.1 | 53.4 | 53.4 | 53.7 | 51.9 | 1536 |
-| tf_efficientdet_d7x | 54.3 | TBD | 54.4 | 55.1 | 77.1 | 1536 |
+| Variant                | mAP (val2017) | mAP (test-dev2017) | mAP (TF official val2017) | mAP (TF official test-dev2017) | Params (M) | Img Size |
+|------------------------|:-------------:| :---: | :---: | :---: |:----------:|:--------:|
+| tf_efficientdet_lite0  |     27.1      | TBD | 26.4 | N/A |    3.24    |   320    |
+| tf_efficientdet_lite1  |     32.2      | TBD | 31.5 | N/A |    4.25    |   384    |
+| efficientdet_d0        |     33.6      | TBD | N/A | N/A |    3.88    |   512    |
+| tf_efficientdet_d0     |     34.2      | TBD | 34.3 | 34.6 |    3.88    |   512    |
+| tf_efficientdet_d0_ap  |     34.8      | TBD | 35.2 | 35.3 |    3.88    |   512    |
+| efficientdet_q0        |     35.7      | TBD | N/A | N/A |    4.13    |   512    |
+| tf_efficientdet_lite2  |     35.9      | TBD | 35.1 | N/A |    5.25    |   448    |
+| efficientdet_d1        |     39.4      | 39.5 | N/A | N/A |    6.62    |   640    |
+| tf_efficientdet_lite3  |     39.6      | TBD | 38.8 | N/A |    8.35    |   512    |
+| tf_efficientdet_d1     |     40.1      | TBD | 40.2 | 40.5 |    6.63    |   640    |
+| tf_efficientdet_d1_ap  |     40.8      | TBD | 40.9 | 40.8 |    6.63    |   640    |
+| efficientdet_q1        |     40.9      | TBD | N/A | N/A |    6.98    |   640    |
+| cspresdext50pan        |     41.2      | TBD | N/A | N/A |    22.2    |   640    |
+| resdet50               |     41.6      | TBD | N/A | N/A |    27.6    |   640    |
+| efficientdet_q2        |     43.1      | TBD | N/A | N/A |    8.81    |   768    |
+| cspresdet50            |     43.2      | TBD | N/A | N/A |    24.3    |   768    |
+| tf_efficientdet_d2     |     43.4      | TBD | 42.5 | 43 |    8.10    |   768    |
+| tf_efficientdet_lite3x |     43.6      | TBD | 42.6 | N/A |    9.28    |   640    |
+| tf_efficientdet_lite4  |     44.2      | TBD | 43.2 | N/A |    15.1    |   640    |
+| tf_efficientdet_d2_ap  |     44.2      | TBD | 44.3 | 44.3 |    8.10    |   768    |
+| cspdarkdet53m          |     45.2      | TBD | N/A | N/A |    35.6    |   768    |
+| efficientdetv2_dt      |     46.1      | TBD | N/A | N/A |    13.4    |   768    |
+| tf_efficientdet_d3     |     47.1      | TBD | 47.2 | 47.5 |    12.0    |   896    |
+| tf_efficientdet_d3_ap  |     47.7      | TBD | 48.0 | 47.7 |    12.0    |   896    |
+| tf_efficientdet_d4     |     49.2      | TBD | 49.3 | 49.7 |    20.7    |   1024   |
+| efficientdetv2_ds      |     50.1      | TBD | N/A | N/A |    26.6    |   1024   |
+| tf_efficientdet_d4_ap  |     50.2      | TBD | 50.4 | 50.4 |    20.7    |   1024   |
+| tf_efficientdet_d5     |     51.2      | TBD | 51.2 | 51.5 |    33.7    |   1280   |
+| tf_efficientdet_d6     |     52.0      | TBD | 52.1 | 52.6 |    51.9    |   1280   |
+| tf_efficientdet_d5_ap  |     52.1      | TBD | 52.2 | 52.5 |    33.7    |   1280   |
+| tf_efficientdet_d7     |     53.1      | 53.4 | 53.4 | 53.7 |    51.9    |   1536   |
+| tf_efficientdet_d7x    |     54.3      | TBD | 54.4 | 55.1 |    77.1    |   1536   |
 
 
 See [model configurations](effdet/config/model_config.py) for model checkpoint urls and differences.
