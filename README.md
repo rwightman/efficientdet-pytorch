@@ -17,7 +17,7 @@ Aside from the default model configs, there is a lot of flexibility to facilitat
 ## Updates
 
 ### 2022-01-06
-* New `efficientnetv2_ds` weights 50.1 mAP @ 1024x0124, using AGC clipping. Memory use comparable to D3, speed faster than D4. Smaller than optimal training batch size so can probably do better... 
+* New `efficientnetv2_ds` weights 50.1 mAP @ 1024x0124, using AGC clipping and `timm`'s `efficientnetv2_rw_s` backbone. Memory use comparable to D3, speed faster than D4. Smaller than optimal training batch size so can probably do better... 
 
 ### 2021-11-30
 * Update `efficientnetv2_dt` weights to a new set, 46.1 mAP @ 768x768, 47.0 mAP @ 896x896 using AGC clipping.
