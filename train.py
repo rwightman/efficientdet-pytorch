@@ -82,7 +82,7 @@ parser.add_argument('--no-resume-opt', action='store_true', default=False,
 parser.add_argument('--mean', type=float, nargs='+', default=None, metavar='MEAN',
                     help='Override mean pixel value of dataset')
 parser.add_argument('--std', type=float, nargs='+', default=None, metavar='STD',
-                    help='Override std deviation of of dataset')
+                    help='Override std deviation of dataset')
 parser.add_argument('--interpolation', default='', type=str, metavar='NAME',
                     help='Image resize interpolation type (overrides model)')
 parser.add_argument('--fill-color', default=None, type=str, metavar='NAME',
