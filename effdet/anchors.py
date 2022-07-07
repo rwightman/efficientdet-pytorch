@@ -353,8 +353,8 @@ class AnchorLabeler(object):
         for level in range(self.anchors.min_level, self.anchors.max_level + 1):
             feat_size = self.anchors.feat_sizes[level]
             steps = feat_size[0] * feat_size[1] * self.anchors.get_anchors_per_location()
-            cls_targets_out.append(cls_targets[count:count + steps].view([feat_size[0], feat_size[1], -1]))
-            box_targets_out.append(box_targets[count:count + steps].view([feat_size[0], feat_size[1], -1]))
+            cls_targets_out.append(cls_targets[count:count + steps].reshape([feat_size[0], feat_size[1], -1]))
+            box_targets_out.append(box_targets[count:count + steps].reshape([feat_size[0], feat_size[1], -1]))
             count += steps
 
         num_positives = (matches.match_results > -1).float().sum()
@@ -393,9 +393,9 @@ class AnchorLabeler(object):
                 feat_size = self.anchors.feat_sizes[level]
                 steps = feat_size[0] * feat_size[1] * self.anchors.get_anchors_per_location()
                 cls_targets_out[level_idx].append(
-                    cls_targets[count:count + steps].view([feat_size[0], feat_size[1], -1]))
+                    cls_targets[count:count + steps].reshape([feat_size[0], feat_size[1], -1]))
                 box_targets_out[level_idx].append(
-                    box_targets[count:count + steps].view([feat_size[0], feat_size[1], -1]))
+                    box_targets[count:count + steps].reshape([feat_size[0], feat_size[1], -1]))
                 count += steps
                 if last_sample:
                     cls_targets_out[level_idx] = torch.stack(cls_targets_out[level_idx])
