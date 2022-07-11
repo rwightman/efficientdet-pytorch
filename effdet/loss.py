@@ -94,7 +94,7 @@ def huber_loss(
     linear = abs_err - quadratic
     loss = 0.5 * quadratic.pow(2) + delta * linear
     if weights is not None:
-        loss *= weights
+        loss = loss.mul(weights)
     if size_average:
         return loss.mean()
     else:
