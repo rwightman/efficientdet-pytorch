@@ -16,6 +16,11 @@ Aside from the default model configs, there is a lot of flexibility to facilitat
 
 ## Updates
 
+### 2023-02-09
+* Testing with PyTorch 2.0 (nightlies), add --torchcompile support to train and validate scripts
+* A small code cleanup pass, support bwd/fwd compat across timm 0.8.x and previous releases
+* Use `timm` convert_sync_batchnorm function as it handles updated models w/ BatchNormAct2d layers
+
 ### 2022-01-06
 * New `efficientnetv2_ds` weights 50.1 mAP @ 1024x0124, using AGC clipping and `timm`'s `efficientnetv2_rw_s` backbone. Memory use comparable to D3, speed faster than D4. Smaller than optimal training batch size so can probably do better... 
 

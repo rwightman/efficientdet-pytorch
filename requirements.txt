@@ -1,5 +1,5 @@
-torch>=1.4.0
-timm>=0.4.12
+torch>=1.12.1
+timm>=0.6.12
 torchvision
 pyyaml
 numpy

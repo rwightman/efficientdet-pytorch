@@ -12,7 +12,10 @@ from contextlib import suppress
 from effdet import create_model, create_evaluator, create_dataset, create_loader
 from effdet.data import resolve_input_config
 from timm.utils import AverageMeter, setup_default_logging
-from timm.models.layers import set_layer_config
+try:
+    from timm.layers import set_layer_config
+except ImportError:
+    from timm.models.layers import set_layer_config
 
 has_apex = False
 try:
@@ -89,6 +92,8 @@ parser.add_argument('--native-amp', action='store_true', default=False,
                     help='Use Native Torch AMP mixed precision')
 parser.add_argument('--torchscript', dest='torchscript', action='store_true',
                     help='convert model torchscript for inference')
+parser.add_argument('--torchcompile', nargs='?', type=str, default=None, const='inductor',
+                    help="Enable compilation w/ specified backend (default: inductor).")
 parser.add_argument('--results', default='', type=str, metavar='FILENAME',
                     help='JSON filename for evaluation results')
 
@@ -128,6 +133,13 @@ def validate(args):
 
     bench = bench.cuda()
 
+    if args.torchscript:
+        assert not args.apex_amp, \
+            'Cannot use APEX AMP with torchscripted model, force native amp with `--native-amp` flag'
+        bench = torch.jit.script(bench)
+    elif args.torchcompile:
+        bench = torch.compile(bench, backend=args.torchcompile)
+
     amp_autocast = suppress
     if args.apex_amp:
         bench = amp.initialize(bench, opt_level='O1')
@@ -153,7 +165,8 @@ def validate(args):
         mean=input_config['mean'],
         std=input_config['std'],
         num_workers=args.workers,
-        pin_mem=args.pin_mem)
+        pin_mem=args.pin_mem,
+    )
 
     evaluator = create_evaluator(args.dataset, dataset, pred_yxyx=False)
     bench.eval()
@@ -169,14 +182,10 @@ def validate(args):
             # measure elapsed time
             batch_time.update(time.time() - end)
             end = time.time()
-
             if i % args.log_freq == 0 or i == last_idx:
                 print(
-                    'Test: [{0:>4d}/{1}]  '
-                    'Time: {batch_time.val:.3f}s ({batch_time.avg:.3f}s, {rate_avg:>7.2f}/s)  '
-                    .format(
-                        i, len(loader), batch_time=batch_time,
-                        rate_avg=input.size(0) / batch_time.avg)
+                    f'Test: [{i:>4d}/{len(loader)}]  '
+                    f'Time: {batch_time.val:.3f}s ({batch_time.avg:.3f}s, {input.size(0) / batch_time.avg:>7.2f}/s)  '
                 )
 
     mean_ap = 0.

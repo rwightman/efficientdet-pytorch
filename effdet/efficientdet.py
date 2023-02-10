@@ -16,8 +16,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from timm import create_model
-from timm.models.layers import create_conv2d, create_pool2d, get_act_layer
-
+try:
+    from timm.layers import create_conv2d, create_pool2d, get_act_layer
+except ImportError:
+    from timm.models.layers import create_conv2d, create_pool2d, get_act_layer
 from .anchors import get_feat_sizes
 from .config import get_fpn_config, set_config_writeable, set_config_readonly
 
@@ -38,11 +40,28 @@ class SequentialList(nn.Sequential):
 
 
 class ConvBnAct2d(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, stride=1, dilation=1, padding='', bias=False,
-                 norm_layer=nn.BatchNorm2d, act_layer=_ACT_LAYER):
+    def __init__(
+            self,
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride=1,
+            dilation=1,
+            padding='',
+            bias=False,
+            norm_layer=nn.BatchNorm2d,
+            act_layer=_ACT_LAYER,
+    ):
         super(ConvBnAct2d, self).__init__()
         self.conv = create_conv2d(
-            in_channels, out_channels, kernel_size, stride=stride, dilation=dilation, padding=padding, bias=bias)
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride=stride,
+            dilation=dilation,
+            padding=padding,
+            bias=bias,
+        )
         self.bn = None if norm_layer is None else norm_layer(out_channels)
         self.act = None if act_layer is None else act_layer(inplace=True)
 
@@ -58,16 +77,37 @@ class ConvBnAct2d(nn.Module):
 class SeparableConv2d(nn.Module):
     """ Separable Conv
     """
-    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, dilation=1, padding='', bias=False,
-                 channel_multiplier=1.0, pw_kernel_size=1, norm_layer=nn.BatchNorm2d, act_layer=_ACT_LAYER):
+    def __init__(
+            self,
+            in_channels,
+            out_channels,
+            kernel_size=3,
+            stride=1,
+            dilation=1,
+            padding='',
+            bias=False,
+            channel_multiplier=1.0,
+            pw_kernel_size=1,
+            norm_layer=nn.BatchNorm2d,
+            act_layer=_ACT_LAYER,
+    ):
         super(SeparableConv2d, self).__init__()
         self.conv_dw = create_conv2d(
-            in_channels, int(in_channels * channel_multiplier), kernel_size,
-            stride=stride, dilation=dilation, padding=padding, depthwise=True)
-
+            in_channels,
+            int(in_channels * channel_multiplier),
+            kernel_size,
+            stride=stride,
+            dilation=dilation,
+            padding=padding,
+            depthwise=True,
+        )
         self.conv_pw = create_conv2d(
-            int(in_channels * channel_multiplier), out_channels, pw_kernel_size, padding=padding, bias=bias)
-
+            int(in_channels * channel_multiplier),
+            out_channels,
+            pw_kernel_size,
+            padding=padding,
+            bias=bias,
+        )
         self.bn = None if norm_layer is None else norm_layer(out_channels)
         self.act = None if act_layer is None else act_layer(inplace=True)
 
@@ -115,11 +155,13 @@ class Interpolate2d(nn.Module):
     mode: str
     align_corners: Optional[bool]
 
-    def __init__(self,
-                 size: Optional[Union[int, Tuple[int, int]]] = None,
-                 scale_factor: Optional[Union[float, Tuple[float, float]]] = None,
-                 mode: str = 'nearest',
-                 align_corners: bool = False) -> None:
+    def __init__(
+            self,
+            size: Optional[Union[int, Tuple[int, int]]] = None,
+            scale_factor: Optional[Union[float, Tuple[float, float]]] = None,
+            mode: str = 'nearest',
+            align_corners: bool = False,
+    ) -> None:
         super(Interpolate2d, self).__init__()
         self.name = type(self).__name__
         self.size = size
@@ -132,14 +174,30 @@ class Interpolate2d(nn.Module):
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         return F.interpolate(
-            input, self.size, self.scale_factor, self.mode, self.align_corners, recompute_scale_factor=False)
+            input,
+            self.size,
+            self.scale_factor,
+            self.mode,
+            self.align_corners,
+            recompute_scale_factor=False,
+        )
 
 
 class ResampleFeatureMap(nn.Sequential):
 
     def __init__(
-            self, in_channels, out_channels, input_size, output_size, pad_type='',
-            downsample=None, upsample=None, norm_layer=nn.BatchNorm2d, apply_bn=False, redundant_bias=False):
+            self,
+            in_channels,
+            out_channels,
+            input_size,
+            output_size,
+            pad_type='',
+            downsample=None,
+            upsample=None,
+            norm_layer=nn.BatchNorm2d,
+            apply_bn=False,
+            redundant_bias=False,
+    ):
         super(ResampleFeatureMap, self).__init__()
         downsample = downsample or 'max'
         upsample = upsample or 'nearest'
@@ -149,10 +207,18 @@ class ResampleFeatureMap(nn.Sequential):
         self.output_size = output_size
 
         if in_channels != out_channels:
-            self.add_module('conv', ConvBnAct2d(
-                in_channels, out_channels, kernel_size=1, padding=pad_type,
-                norm_layer=norm_layer if apply_bn else None,
-                bias=not apply_bn or redundant_bias, act_layer=None))
+            self.add_module(
+                'conv',
+                ConvBnAct2d(
+                    in_channels,
+                    out_channels,
+                    kernel_size=1,
+                    padding=pad_type,
+                    norm_layer=norm_layer if apply_bn else None,
+                    bias=not apply_bn or redundant_bias,
+                    act_layer=None,
+                )
+            )
 
         if input_size[0] > output_size[0] and input_size[1] > output_size[1]:
             if downsample in ('max', 'avg'):
@@ -183,9 +249,20 @@ class ResampleFeatureMap(nn.Sequential):
 
 
 class FpnCombine(nn.Module):
-    def __init__(self, feature_info, fpn_channels, inputs_offsets, output_size, pad_type='',
-                 downsample=None, upsample=None, norm_layer=nn.BatchNorm2d, apply_resample_bn=False,
-                 redundant_bias=False, weight_method='attn'):
+    def __init__(
+            self,
+            feature_info,
+            fpn_channels,
+            inputs_offsets,
+            output_size,
+            pad_type='',
+            downsample=None,
+            upsample=None,
+            norm_layer=nn.BatchNorm2d,
+            apply_resample_bn=False,
+            redundant_bias=False,
+            weight_method='attn',
+    ):
         super(FpnCombine, self).__init__()
         self.inputs_offsets = inputs_offsets
         self.weight_method = weight_method
@@ -193,10 +270,17 @@ class FpnCombine(nn.Module):
         self.resample = nn.ModuleDict()
         for idx, offset in enumerate(inputs_offsets):
             self.resample[str(offset)] = ResampleFeatureMap(
-                feature_info[offset]['num_chs'], fpn_channels,
-                input_size=feature_info[offset]['size'], output_size=output_size, pad_type=pad_type,
-                downsample=downsample, upsample=upsample, norm_layer=norm_layer, apply_bn=apply_resample_bn,
-                redundant_bias=redundant_bias)
+                feature_info[offset]['num_chs'],
+                fpn_channels,
+                input_size=feature_info[offset]['size'],
+                output_size=output_size,
+                pad_type=pad_type,
+                downsample=downsample,
+                upsample=upsample,
+                norm_layer=norm_layer,
+                apply_bn=apply_resample_bn,
+                redundant_bias=redundant_bias,
+            )
 
         if weight_method == 'attn' or weight_method == 'fastattn':
             self.edge_weights = nn.Parameter(torch.ones(len(inputs_offsets)), requires_grad=True)  # WSM
@@ -241,9 +325,23 @@ class Fnode(nn.Module):
 
 
 class BiFpnLayer(nn.Module):
-    def __init__(self, feature_info, feat_sizes, fpn_config, fpn_channels, num_levels=5, pad_type='',
-                 downsample=None, upsample=None, norm_layer=nn.BatchNorm2d, act_layer=_ACT_LAYER,
-                 apply_resample_bn=False, pre_act=True, separable_conv=True, redundant_bias=False):
+    def __init__(
+            self,
+            feature_info,
+            feat_sizes,
+            fpn_config,
+            fpn_channels,
+            num_levels=5,
+            pad_type='',
+            downsample=None,
+            upsample=None,
+            norm_layer=nn.BatchNorm2d,
+            act_layer=_ACT_LAYER,
+            apply_resample_bn=False,
+            pre_act=True,
+            separable_conv=True,
+            redundant_bias=False,
+    ):
         super(BiFpnLayer, self).__init__()
         self.num_levels = num_levels
         # fill feature info for all FPN nodes (chs and feat size) before creating FPN nodes
@@ -254,15 +352,29 @@ class BiFpnLayer(nn.Module):
         for i, fnode_cfg in enumerate(fpn_config.nodes):
             logging.debug('fnode {} : {}'.format(i, fnode_cfg))
             combine = FpnCombine(
-                fpn_feature_info, fpn_channels, tuple(fnode_cfg['inputs_offsets']),
-                output_size=feat_sizes[fnode_cfg['feat_level']], pad_type=pad_type,
-                downsample=downsample, upsample=upsample, norm_layer=norm_layer, apply_resample_bn=apply_resample_bn,
-                redundant_bias=redundant_bias, weight_method=fnode_cfg['weight_method'])
+                fpn_feature_info,
+                fpn_channels,
+                tuple(fnode_cfg['inputs_offsets']),
+                output_size=feat_sizes[fnode_cfg['feat_level']],
+                pad_type=pad_type,
+                downsample=downsample,
+                upsample=upsample,
+                norm_layer=norm_layer,
+                apply_resample_bn=apply_resample_bn,
+                redundant_bias=redundant_bias,
+                weight_method=fnode_cfg['weight_method'],
+            )
 
             after_combine = nn.Sequential()
             conv_kwargs = dict(
-                in_channels=fpn_channels, out_channels=fpn_channels, kernel_size=3, padding=pad_type,
-                bias=False, norm_layer=norm_layer, act_layer=act_layer)
+                in_channels=fpn_channels,
+                out_channels=fpn_channels,
+                kernel_size=3,
+                padding=pad_type,
+                bias=False,
+                norm_layer=norm_layer,
+                act_layer=act_layer,
+            )
             if pre_act:
                 conv_kwargs['bias'] = redundant_bias
                 conv_kwargs['act_layer'] = None
@@ -362,8 +474,14 @@ class HeadNet(nn.Module):
         # Build convolution repeats
         conv_fn = SeparableConv2d if config.separable_conv else ConvBnAct2d
         conv_kwargs = dict(
-            in_channels=config.fpn_channels, out_channels=config.fpn_channels, kernel_size=3,
-            padding=config.pad_type, bias=config.redundant_bias, act_layer=None, norm_layer=None)
+            in_channels=config.fpn_channels,
+            out_channels=config.fpn_channels,
+            kernel_size=3,
+            padding=config.pad_type,
+            bias=config.redundant_bias,
+            act_layer=None,
+            norm_layer=None,
+        )
         self.conv_rep = nn.ModuleList([conv_fn(**conv_kwargs) for _ in range(config.box_class_repeats)])
 
         # Build batchnorm repeats. There is a unique batchnorm per feature level for each repeat.
@@ -385,8 +503,14 @@ class HeadNet(nn.Module):
         # Prediction (output) layer. Has bias with special init reqs, see init fn.
         num_anchors = len(config.aspect_ratios) * config.num_scales
         predict_kwargs = dict(
-            in_channels=config.fpn_channels, out_channels=num_outputs * num_anchors, kernel_size=3,
-            padding=config.pad_type, bias=True, norm_layer=None, act_layer=None)
+            in_channels=config.fpn_channels,
+            out_channels=num_outputs * num_anchors,
+            kernel_size=3,
+            padding=config.pad_type,
+            bias=True,
+            norm_layer=None,
+            act_layer=None,
+        )
         self.predict = conv_fn(**predict_kwargs)
 
     @torch.jit.ignore()
@@ -529,8 +653,9 @@ def _init_weight_alt(m, n='', ):
 def get_feature_info(backbone):
     if isinstance(backbone.feature_info, Callable):
         # old accessor for timm versions <= 0.1.30, efficientnet and mobilenetv3 and related nets only
-        feature_info = [dict(num_chs=f['num_chs'], reduction=f['reduction'])
-                        for i, f in enumerate(backbone.feature_info())]
+        feature_info = [
+            dict(num_chs=f['num_chs'], reduction=f['reduction'])
+            for i, f in enumerate(backbone.feature_info())]
     else:
         # new feature info accessor, timm >= 0.2, all models supported
         feature_info = backbone.feature_info.get_dicts(keys=['num_chs', 'reduction'])
@@ -544,9 +669,12 @@ class EfficientDet(nn.Module):
         self.config = config
         set_config_readonly(self.config)
         self.backbone = create_model(
-            config.backbone_name, features_only=True,
+            config.backbone_name,
+            features_only=True,
             out_indices=self.config.backbone_indices or (2, 3, 4),
-            pretrained=pretrained_backbone, **config.backbone_args)
+            pretrained=pretrained_backbone,
+            **config.backbone_args,
+        )
         feature_info = get_feature_info(self.backbone)
         self.fpn = BiFpn(self.config, feature_info)
         self.class_net = HeadNet(self.config, num_outputs=self.config.num_classes)

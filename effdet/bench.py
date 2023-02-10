@@ -80,8 +80,16 @@ def _batch_detection(
         img_scale_i = None if img_scale is None else img_scale[i]
         img_size_i = None if img_size is None else img_size[i]
         detections = generate_detections(
-            class_out[i], box_out[i], anchor_boxes, indices[i], classes[i],
-            img_scale_i, img_size_i, max_det_per_image=max_det_per_image, soft_nms=soft_nms)
+            class_out[i],
+            box_out[i],
+            anchor_boxes,
+            indices[i],
+            classes[i],
+            img_scale_i,
+            img_size_i,
+            max_det_per_image=max_det_per_image,
+            soft_nms=soft_nms,
+        )
         batch_detections.append(detections)
     return torch.stack(batch_detections, dim=0)
 
@@ -101,15 +109,27 @@ class DetBenchPredict(nn.Module):
     def forward(self, x, img_info: Optional[Dict[str, torch.Tensor]] = None):
         class_out, box_out = self.model(x)
         class_out, box_out, indices, classes = _post_process(
-            class_out, box_out, num_levels=self.num_levels, num_classes=self.num_classes,
-            max_detection_points=self.max_detection_points)
+            class_out,
+            box_out,
+            num_levels=self.num_levels,
+            num_classes=self.num_classes,
+            max_detection_points=self.max_detection_points,
+        )
         if img_info is None:
             img_scale, img_size = None, None
         else:
             img_scale, img_size = img_info['img_scale'], img_info['img_size']
         return _batch_detection(
-            x.shape[0], class_out, box_out, self.anchors.boxes, indices, classes,
-            img_scale, img_size, max_det_per_image=self.max_det_per_image, soft_nms=self.soft_nms
+            x.shape[0],
+            class_out,
+            box_out,
+            self.anchors.boxes,
+            indices,
+            classes,
+            img_scale,
+            img_size,
+            max_det_per_image=self.max_det_per_image,
+            soft_nms=self.soft_nms,
         )
 
 
@@ -126,7 +146,11 @@ class DetBenchTrain(nn.Module):
         self.soft_nms = model.config.soft_nms
         self.anchor_labeler = None
         if create_labeler:
-            self.anchor_labeler = AnchorLabeler(self.anchors, self.num_classes, match_threshold=0.5)
+            self.anchor_labeler = AnchorLabeler(
+                self.anchors,
+                self.num_classes,
+                match_threshold=0.5,
+            )
         self.loss_fn = DetectionLoss(model.config)
 
     def forward(self, x, target: Dict[str, torch.Tensor]):
@@ -139,19 +163,39 @@ class DetBenchTrain(nn.Module):
             num_positives = target['label_num_positives']
         else:
             cls_targets, box_targets, num_positives = self.anchor_labeler.batch_label_anchors(
-                target['bbox'], target['cls'])
+                target['bbox'],
+                target['cls'],
+            )
 
-        loss, class_loss, box_loss = self.loss_fn(class_out, box_out, cls_targets, box_targets, num_positives)
+        loss, class_loss, box_loss = self.loss_fn(
+            class_out,
+            box_out,
+            cls_targets,
+            box_targets,
+            num_positives,
+        )
         output = {'loss': loss, 'class_loss': class_loss, 'box_loss': box_loss}
         if not self.training:
             # if eval mode, output detections for evaluation
             class_out_pp, box_out_pp, indices, classes = _post_process(
-                class_out, box_out, num_levels=self.num_levels, num_classes=self.num_classes,
-                max_detection_points=self.max_detection_points)
+                class_out,
+                box_out,
+                num_levels=self.num_levels,
+                num_classes=self.num_classes,
+                max_detection_points=self.max_detection_points,
+            )
             output['detections'] = _batch_detection(
-                x.shape[0], class_out_pp, box_out_pp, self.anchors.boxes, indices, classes,
-                target['img_scale'], target['img_size'],
-                max_det_per_image=self.max_det_per_image, soft_nms=self.soft_nms)
+                x.shape[0],
+                class_out_pp,
+                box_out_pp,
+                self.anchors.boxes,
+                indices,
+                classes,
+                target['img_scale'],
+                target['img_size'],
+                max_det_per_image=self.max_det_per_image,
+                soft_nms=self.soft_nms,
+            )
         return output
 
 
