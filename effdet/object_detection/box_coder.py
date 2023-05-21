@@ -52,7 +52,7 @@ Faster RCNN box coder follows the coding schema described below:
 """
 
 
-EPS = 1e-8
+EPS = 1e-7
 
 
 #@torch.jit.script
