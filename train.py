@@ -111,8 +111,8 @@ parser.add_argument('--clip-mode', type=str, default='norm',
 # Optimizer parameters
 parser.add_argument('--opt', default='momentum', type=str, metavar='OPTIMIZER',
                     help='Optimizer (default: "momentum"')
-parser.add_argument('--opt-eps', default=1e-3, type=float, metavar='EPSILON',
-                    help='Optimizer Epsilon (default: 1e-3)')
+parser.add_argument('--opt-eps', default=None, type=float, metavar='EPSILON',
+                    help='Optimizer Epsilon (default: None, optimizer default)')
 parser.add_argument('--momentum', type=float, default=0.9, metavar='M',
                     help='SGD momentum (default: 0.9)')
 parser.add_argument('--weight-decay', type=float, default=4e-5,
@@ -330,14 +330,12 @@ def main():
                 'zero initialized BN layers (enabled by default for ResNets) while sync-bn enabled.')
 
     if args.torchscript:
+        assert not args.torchcompile, 'Cannot use torch.compile() with torch.jit.script()'
         assert not use_amp == 'apex', \
             'Cannot use APEX AMP with torchscripted model, force native amp with `--native-amp` flag'
         assert not args.sync_bn, \
             'Cannot use SyncBatchNorm with torchscripted model. Use `--dist-bn reduce` instead of `--sync-bn`'
         model = torch.jit.script(model)
-    elif args.torchcompile:
-        # FIXME dynamo might need move below DDP wrapping? TBD
-        model = torch.compile(model, backend=args.torchcompile)
 
     optimizer = create_optimizer(args, model)
 
@@ -389,6 +387,9 @@ def main():
             # ...but it is a good idea to sync EMA copy of weights
             # NOTE: ModelEma init could be moved after DDP wrapper if using PyTorch DDP, not Apex.
             model_ema.set(model)
+
+    if args.torchcompile:
+        model = torch.compile(model, backend=args.torchcompile)
 
     lr_scheduler, num_epochs = create_scheduler(args, optimizer)
     start_epoch = 0
@@ -521,7 +522,10 @@ def create_datasets_and_loaders(
     labeler = None
     if not args.bench_labeler:
         labeler = AnchorLabeler(
-            Anchors.from_config(model_config), model_config.num_classes, match_threshold=0.5)
+            Anchors.from_config(model_config),
+            model_config.num_classes,
+            match_threshold=0.5,
+        )
 
     loader_train = create_loader(
         dataset_train,
