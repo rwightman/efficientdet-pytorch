@@ -16,6 +16,11 @@ Aside from the default model configs, there is a lot of flexibility to facilitat
 
 ## Updates
 
+### 2023-05-21
+* Depend on `timm` 0.9
+* Minor bug fixes
+* Version 0.4.1 release
+
 ### 2023-02-09
 * Testing with PyTorch 2.0 (nightlies), add --torchcompile support to train and validate scripts
 * A small code cleanup pass, support bwd/fwd compat across timm 0.8.x and previous releases
