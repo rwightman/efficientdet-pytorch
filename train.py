@@ -216,7 +216,6 @@ parser.add_argument('--eval-metric', default='map', type=str, metavar='EVAL_METR
                     help='Best metric (default: "map"')
 parser.add_argument('--tta', type=int, default=0, metavar='N',
                     help='Test/inference time augmentation (oversampling) factor. 0=None (default: 0)')
-parser.add_argument("--local_rank", default=0, type=int)
 
 
 def _parse_args():
@@ -256,14 +255,8 @@ def main():
     args.device = 'cuda:0'
     args.world_size = 1
     args.rank = 0  # global rank
-    if args.distributed:
-        args.device = 'cuda:%d' % args.local_rank
-        torch.cuda.set_device(args.local_rank)
-        torch.distributed.init_process_group(backend='nccl', init_method='env://')
-        args.world_size = torch.distributed.get_world_size()
-        args.rank = torch.distributed.get_rank()
+    device = utils.init_distributed_device(args)
     assert args.rank >= 0
-
     if args.distributed:
         logging.info('Training in distributed mode with multiple processes, 1 GPU per process. Process %d, total %d.'
                      % (args.rank, args.world_size))
