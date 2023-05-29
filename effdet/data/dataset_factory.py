@@ -12,7 +12,7 @@ from .dataset import DetectionDatset
 from .parsers import create_parser
 
 
-def create_dataset(name, root, splits=('train', 'val')):
+def create_dataset(name, root, splits=('train', 'val'), mosaic=False):
     if isinstance(splits, str):
         splits = (splits,)
     name = name.lower()
@@ -36,6 +36,7 @@ def create_dataset(name, root, splits=('train', 'val')):
             datasets[s] = dataset_cls(
                 data_dir=root / Path(split_cfg['img_dir']),
                 parser=create_parser(dataset_cfg.parser, cfg=parser_cfg),
+                mosaic=mosaic
             )
     elif name.startswith('voc'):
         if 'voc0712' in name:

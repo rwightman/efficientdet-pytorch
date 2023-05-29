@@ -2,11 +2,14 @@
 
 Hacked together by Ross Wightman
 """
+
 import torch.utils.data as data
 import numpy as np
+import os
 
 from PIL import Image
 from .parsers import create_parser
+from .mosaic_augmentation import MosaicAugmentation
 
 
 class DetectionDatset(data.Dataset):
@@ -18,9 +21,9 @@ class DetectionDatset(data.Dataset):
 
     """
 
-    def __init__(self, data_dir, parser=None, parser_kwargs=None, transform=None):
+    def __init__(self, data_dir, parser=None, mosaic=False, parser_kwargs=None, transform=None):
         super(DetectionDatset, self).__init__()
-        parser_kwargs = parser_kwargs or {}
+        parser_kwargs = parser_kwargs or {}  
         self.data_dir = data_dir
         if isinstance(parser, str):
             self._parser = create_parser(parser, **parser_kwargs)
@@ -28,7 +31,7 @@ class DetectionDatset(data.Dataset):
             assert parser is not None and len(parser.img_ids)
             self._parser = parser
         self._transform = transform
-
+        self.mosaic = mosaic 
     def __getitem__(self, index):
         """
         Args:
@@ -36,14 +39,26 @@ class DetectionDatset(data.Dataset):
         Returns:
             tuple: Tuple (image, annotations (target)).
         """
+
+        
         img_info = self._parser.img_infos[index]
         target = dict(img_idx=index, img_size=(img_info['width'], img_info['height']))
         if self._parser.has_labels:
             ann = self._parser.get_ann_info(index)
             target.update(ann)
+            
 
         img_path = self.data_dir / img_info['file_name']
         img = Image.open(img_path).convert('RGB')
+        if "train" in os.fsdecode(self.data_dir) and self.mosaic:
+            mosaic_augmentation = MosaicAugmentation(index,
+                                                     self._parser,
+                                                     self.data_dir)
+            img, bboxes, classes, img_size = mosaic_augmentation()
+            target.update(
+                img_size=(img_size, img_size), bbox=bboxes, cls=classes)
+
+
         if self.transform is not None:
             img, target = self.transform(img, target)
 
