@@ -11,7 +11,7 @@ from copy import deepcopy
 
 def default_detection_model_configs():
     """Returns a default detection configs."""
-    h = OmegaConf.create()
+    h = OmegaConf.create(flag={"allow_objects": True})
 
     # model name.
     h.name = 'tf_efficientdet_d1'
