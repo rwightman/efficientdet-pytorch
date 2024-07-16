@@ -112,8 +112,8 @@ class PrefetchLoader:
             device="cuda"
             ):
         self.loader = loader
-        self.mean = torch.tensor([x * 255 for x in mean]).cuda().view(1, 3, 1, 1)
-        self.std = torch.tensor([x * 255 for x in std]).cuda().view(1, 3, 1, 1)
+        self.mean = torch.tensor([x * 255 for x in mean]).to(device).view(1, 3, 1, 1)
+        self.std = torch.tensor([x * 255 for x in std]).to(device).view(1, 3, 1, 1)
         if re_prob > 0.:
             self.random_erasing = RandomErasing(probability=re_prob, mode=re_mode, max_count=re_count)
         else:
