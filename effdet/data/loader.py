@@ -109,33 +109,47 @@ class PrefetchLoader:
             re_prob=0.,
             re_mode='pixel',
             re_count=1,
+            device="cuda"
             ):
         self.loader = loader
-        self.mean = torch.tensor([x * 255 for x in mean]).cuda().view(1, 3, 1, 1)
-        self.std = torch.tensor([x * 255 for x in std]).cuda().view(1, 3, 1, 1)
+        self.mean = torch.tensor([x * 255 for x in mean]).to(device).view(1, 3, 1, 1)
+        self.std = torch.tensor([x * 255 for x in std]).to(device).view(1, 3, 1, 1)
         if re_prob > 0.:
             self.random_erasing = RandomErasing(probability=re_prob, mode=re_mode, max_count=re_count)
         else:
             self.random_erasing = None
+        self.device = device
 
     def __iter__(self):
-        stream = torch.cuda.Stream()
         first = True
+        if self.device == "cuda":
+            stream = torch.cuda.Stream()
 
         for next_input, next_target in self.loader:
-            with torch.cuda.stream(stream):
-                next_input = next_input.cuda(non_blocking=True)
+            if self.device == "cuda":
+                with torch.cuda.stream(stream):
+                    next_input = next_input.cuda(non_blocking=True)
+                    next_input = next_input.float().sub_(self.mean).div_(self.std)
+                    next_target = {k: v.cuda(non_blocking=True) for k, v in next_target.items()}
+                    if self.random_erasing is not None:
+                        next_input = self.random_erasing(next_input, next_target)
+                    if not first:
+                        yield input, target
+                    else:
+                        first = False
+                    torch.cuda.current_stream().wait_stream(stream)
+            else:
+                next_input = next_input.to(self.device)
                 next_input = next_input.float().sub_(self.mean).div_(self.std)
-                next_target = {k: v.cuda(non_blocking=True) for k, v in next_target.items()}
+                next_target = {k: v.to(self.device) for k, v in next_target.items()}
                 if self.random_erasing is not None:
                     next_input = self.random_erasing(next_input, next_target)
 
-            if not first:
-                yield input, target
-            else:
-                first = False
+                if not first:
+                    yield input, target
+                else:
+                    first = False
 
-            torch.cuda.current_stream().wait_stream(stream)
             input = next_input
             target = next_target
 
@@ -172,6 +186,7 @@ def create_loader(
         anchor_labeler=None,
         transform_fn=None,
         collate_fn=None,
+        device="cuda"
 ):
     if isinstance(input_size, tuple):
         img_size = input_size[-2:]
@@ -225,8 +240,8 @@ def create_loader(
     )
     if use_prefetcher:
         if is_training:
-            loader = PrefetchLoader(loader, mean=mean, std=std, re_prob=re_prob, re_mode=re_mode, re_count=re_count)
+            loader = PrefetchLoader(loader, mean=mean, std=std, re_prob=re_prob, re_mode=re_mode, re_count=re_count, device=device)
         else:
-            loader = PrefetchLoader(loader, mean=mean, std=std)
+            loader = PrefetchLoader(loader, mean=mean, std=std, device=device)
 
     return loader
