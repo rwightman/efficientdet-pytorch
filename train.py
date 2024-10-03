@@ -61,7 +61,8 @@ from effdet.anchors import Anchors, AnchorLabeler
 
 torch.backends.cudnn.benchmark = True
 
-
+import cv2
+import numpy as np
 # The first arg parser parses out only the --config argument, this argument is used to
 # load a yaml file containing key-values that override the defaults for the main parser below
 config_parser = parser = argparse.ArgumentParser(description='Training Config', add_help=False)
@@ -165,6 +166,8 @@ parser.add_argument('--recount', type=int, default=1,
                     help='Random erase count (default: 1)')
 parser.add_argument('--train-interpolation', type=str, default='random',
                     help='Training interpolation (random, bilinear, bicubic default: "random")')
+parser.add_argument('--mosaic', action='store_true', default=False,
+                    help='Mosaic Data Augmentation')
 
 # loss
 parser.add_argument('--smoothing', type=float, default=None, help='override model config label smoothing')
@@ -508,8 +511,7 @@ def create_datasets_and_loaders(
         Train loader, validation loader, evaluator
     """
     input_config = resolve_input_config(args, model_config=model_config)
-
-    dataset_train, dataset_eval = create_dataset(args.dataset, args.root)
+    dataset_train, dataset_eval = create_dataset(args.dataset, args.root, mosaic=args.mosaic)  
 
     # setup labeler in loader/collate_fn if not enabled in the model bench
     labeler = None
